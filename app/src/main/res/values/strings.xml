@@ -1,0 +1,71 @@
+<resources>
+    <string name="app_name">Foliisho</string>
+    <string name="tagline">Smart Fuel &amp; Transit Queue System</string>
+    <string name="tagline_am">ዘመናዊ የነዳጅ እና የትራንስፖርት ተራ አስተዳደር</string>
+
+    <!-- Stations in Hawassa -->
+    <string name="st_benzene_madya">Benzene Madya Central</string>
+    <string name="st_benzene_madya_am">ቤንዚን ማድያ ዋና ጣቢያ</string>
+    <string name="st_total_menahariya">TotalEnergies Menahariya</string>
+    <string name="st_total_menahariya_am">ቶታል ኢነርጂ መናኸሪያ</string>
+    <string name="st_noc_piassa">NOC Piassa</string>
+    <string name="st_noc_piassa_am">ኤን ኦ ሲ ፒያሳ</string>
+    <string name="st_ola_datto">Ola Energy Datto</string>
+    <string name="st_ola_datto_am">ኦላ ኢነርጂ ዳቶ</string>
+    <string name="st_tabor_oil">National Oil Tabor</string>
+    <string name="st_tabor_oil_am">ናሽናል ኦይል ታቦር</string>
+
+    <!-- Vehicle Types -->
+    <string name="veh_all">All</string>
+    <string name="veh_all_am">ሁሉም</string>
+    <string name="veh_bajaj">Bajaj (3-Wheeler)</string>
+    <string name="veh_bajaj_am">ባጃጅ (ባለ 3 እግር)</string>
+    <string name="veh_taxi">Minibus / Taxi</string>
+    <string name="veh_taxi_am">ሚኒባስ / ታክሲ</string>
+    <string name="veh_bus">Public Bus</string>
+    <string name="veh_bus_am">የህዝብ አውቶቡስ</string>
+    <string name="veh_car">Automobile / Car</string>
+    <string name="veh_car_am">አውቶሞቢል / መኪና</string>
+    <string name="veh_motorcycle">Motorcycle</string>
+    <string name="veh_motorcycle_am">ሞተር ሳይክል</string>
+    <string name="veh_truck">Truck / Heavy</string>
+    <string name="veh_truck_am">የጭነት ተሽከርካሪ</string>
+
+    <!-- Fuel Status -->
+    <string name="fuel_benzene">Benzene</string>
+    <string name="fuel_benzene_am">ቤንዚን</string>
+    <string name="fuel_diesel">Diesel</string>
+    <string name="fuel_diesel_am">ናፍጣ</string>
+    <string name="fuel_available">In Stock</string>
+    <string name="fuel_available_am">በቂ ክምችት</string>
+    <string name="fuel_low">Low Stock</string>
+    <string name="fuel_low_am">ዝቅተኛ ክምችት</string>
+    <string name="fuel_empty">Out of Stock</string>
+    <string name="fuel_empty_am">አልቋል</string>
+
+    <!-- Congestion Levels -->
+    <string name="cong_low">Flowing Smoothly</string>
+    <string name="cong_low_am">የተረጋጋ ትራፊክ</string>
+    <string name="cong_mod">Moderate Queue</string>
+    <string name="cong_mod_am">መካከለኛ መጨናነቅ</string>
+    <string name="cong_heavy">Heavy Congestion</string>
+    <string name="cong_heavy_am">ከፍተኛ መጨናነቅ</string>
+
+    <!-- Common UI Labels -->
+    <string name="btn_join_queue">Join Station Queue</string>
+    <string name="btn_join_queue_am">ወደዚህ ጣቢያ ተሰለፍ</string>
+    <string name="btn_leave_queue">Leave Queue</string>
+    <string name="btn_leave_queue_am">ከተራ ውጣ</string>
+    <string name="lbl_your_token">Your Queue Token</string>
+    <string name="lbl_your_token_am">የእርስዎ የተራ ቁጥር</string>
+    <string name="lbl_ahead">Vehicles Ahead</string>
+    <string name="lbl_ahead_am">የሚቀሩ ተሽከርካሪዎች</string>
+    <string name="lbl_estimated_wait">Est. Waiting Time</string>
+    <string name="lbl_estimated_wait_am">የሚገመተው የጥበቃ ጊዜ</string>
+    <string name="lbl_ten_min_alert">10-Minute Alert Triggered!</string>
+    <string name="lbl_ten_min_alert_am">የ10 ደቂቃ ማስጠንቀቂያ ደርሷል!</string>
+    <string name="msg_ten_min_speech">ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!</string>
+    <string name="msg_ten_min_speech_en">Your turn will arrive in 10 minutes; please come to the station!</string>
+    <string name="lbl_admin_called_category">Active Allowed Category (Set by Web Admin):</string>
+    <string name="lbl_admin_called_category_am">በአስተዳዳሪ የተፈቀደው ተሽከርካሪ ዓይነት:</string>
+</resources>

@@ -1,0 +1,149 @@
+[
+  {
+    "id": "benzene_madya",
+    "nameEn": "Benzene Madya Central",
+    "nameAm": "ቤንዚን ማድያ ዋና ጣቢያ",
+    "neighborhood": "Piazza / Menahariya Road",
+    "isOpen": true,
+    "benzeneStatus": "AVAILABLE",
+    "dieselStatus": "AVAILABLE",
+    "congestionLevel": "MODERATE",
+    "activePermittedCategory": "BAJAJ",
+    "lanes": {
+      "BAJAJ": {
+        "currentlyServing": 118,
+        "lastAssigned": 126,
+        "avgDurationSeconds": 110,
+        "isActive": true
+      },
+      "TAXI_MINIBUS": {
+        "currentlyServing": 62,
+        "lastAssigned": 68,
+        "avgDurationSeconds": 240,
+        "isActive": true
+      },
+      "PUBLIC_BUS": {
+        "currentlyServing": 21,
+        "lastAssigned": 24,
+        "avgDurationSeconds": 480,
+        "isActive": true
+      },
+      "CAR": {
+        "currentlyServing": 39,
+        "lastAssigned": 45,
+        "avgDurationSeconds": 180,
+        "isActive": true
+      },
+      "MOTORCYCLE": {
+        "currentlyServing": 16,
+        "lastAssigned": 18,
+        "avgDurationSeconds": 90,
+        "isActive": true
+      },
+      "TRUCK_HEAVY": {
+        "currentlyServing": 10,
+        "lastAssigned": 12,
+        "avgDurationSeconds": 800,
+        "isActive": true
+      }
+    }
+  },
+  {
+    "id": "total_menahariya",
+    "nameEn": "TotalEnergies Menahariya",
+    "nameAm": "ቶታል ኢነርጂ መናኸሪያ",
+    "neighborhood": "Hawassa Main Bus Terminal",
+    "isOpen": true,
+    "benzeneStatus": "AVAILABLE",
+    "dieselStatus": "AVAILABLE",
+    "congestionLevel": "HEAVY",
+    "activePermittedCategory": "TAXI_MINIBUS",
+    "lanes": {
+      "BAJAJ": {
+        "currentlyServing": 138,
+        "lastAssigned": 160,
+        "avgDurationSeconds": 110,
+        "isActive": true
+      },
+      "TAXI_MINIBUS": {
+        "currentlyServing": 81,
+        "lastAssigned": 95,
+        "avgDurationSeconds": 220,
+        "isActive": true
+      },
+      "PUBLIC_BUS": {
+        "currentlyServing": 27,
+        "lastAssigned": 35,
+        "avgDurationSeconds": 500,
+        "isActive": true
+      },
+      "CAR": {
+        "currentlyServing": 42,
+        "lastAssigned": 52,
+        "avgDurationSeconds": 190,
+        "isActive": true
+      },
+      "MOTORCYCLE": {
+        "currentlyServing": 19,
+        "lastAssigned": 22,
+        "avgDurationSeconds": 90,
+        "isActive": true
+      },
+      "TRUCK_HEAVY": {
+        "currentlyServing": 14,
+        "lastAssigned": 18,
+        "avgDurationSeconds": 850,
+        "isActive": true
+      }
+    }
+  },
+  {
+    "id": "noc_piassa",
+    "nameEn": "NOC Piassa Central",
+    "nameAm": "ኤን ኦ ሲ ፒያሳ መሀል ከተማ",
+    "neighborhood": "Piassa Commercial Center",
+    "isOpen": true,
+    "benzeneStatus": "AVAILABLE",
+    "dieselStatus": "LOW_STOCK",
+    "congestionLevel": "LOW",
+    "activePermittedCategory": "BAJAJ",
+    "lanes": {
+      "BAJAJ": {
+        "currentlyServing": 82,
+        "lastAssigned": 88,
+        "avgDurationSeconds": 100,
+        "isActive": true
+      },
+      "TAXI_MINIBUS": {
+        "currentlyServing": 28,
+        "lastAssigned": 32,
+        "avgDurationSeconds": 240,
+        "isActive": true
+      },
+      "PUBLIC_BUS": {
+        "currentlyServing": 9,
+        "lastAssigned": 10,
+        "avgDurationSeconds": 540,
+        "isActive": true
+      },
+      "CAR": {
+        "currentlyServing": 27,
+        "lastAssigned": 30,
+        "avgDurationSeconds": 180,
+        "isActive": true
+      },
+      "MOTORCYCLE": {
+        "currentlyServing": 14,
+        "lastAssigned": 15,
+        "avgDurationSeconds": 90,
+        "isActive": true
+      },
+      "TRUCK_HEAVY": {
+        "currentlyServing": 5,
+        "lastAssigned": 6,
+        "avgDurationSeconds": 900,
+        "isActive": true
+      }
+    }
+  }
+]

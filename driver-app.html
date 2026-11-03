@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hawassa Transit Driver - Mobile Web App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/shared-store.js"></script>
+  <script src="/cloud-sync.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
+    .amber-gradient { background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); }
+    @keyframes alertPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.9; }
+    }
+    .animate-alert-pulse {
+      animation: alertPulse 1.2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col max-w-md mx-auto shadow-2xl border-x border-gray-900">
+
+  <!-- Mobile Top Bar -->
+  <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-40 flex items-center justify-between">
+    <div class="flex items-center space-x-2.5">
+      <div class="w-8 h-8 rounded-lg amber-gradient flex items-center justify-center text-gray-950 font-black text-base shadow">
+        ⛽
+      </div>
+      <div>
+        <h1 class="text-xs font-black text-white">Hawassa Driver Radar</h1>
+        <p class="text-[10px] text-gray-400">ቤንዚን ማድያ እና ጣቢያዎች</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <!-- Language Toggle -->
+      <button onclick="toggleLang()" class="px-2.5 py-1 bg-gray-800 text-amber-400 border border-gray-700 text-xs font-bold rounded-lg transition">
+        <span id="langBtnText">አማርኛ</span>
+      </button>
+
+      <!-- View Switcher -->
+      <div class="flex items-center bg-gray-950 p-0.5 rounded-lg border border-gray-800">
+        <button id="btnTabRadar" onclick="switchTab('radar')" class="px-2 py-1 text-[11px] font-bold rounded bg-amber-500 text-gray-950">
+          Stations
+        </button>
+        <button id="btnTabTicket" onclick="switchTab('ticket')" class="px-2 py-1 text-[11px] font-bold rounded text-gray-400">
+          Ticket
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast -->
+  <div id="toastBox" class="fixed top-16 left-4 right-4 z-50 hidden bg-gray-900 border border-amber-500 text-white text-xs p-3 rounded-xl shadow-2xl flex items-center space-x-2">
+    <span class="text-amber-400 text-base">📢</span>
+    <span id="toastMsg">Alert</span>
+  </div>
+
+  <!-- TAB 1: STATIONS RADAR -->
+  <main id="tabRadarScreen" class="flex-1 p-3 space-y-3 overflow-y-auto">
+    <!-- Coordinator Permitted Category Banner -->
+    <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start space-x-2.5">
+      <span class="text-xl">📢</span>
+      <div>
+        <h2 class="text-xs font-black text-amber-400 uppercase tracking-wide">Coordinator Announcement</h2>
+        <p class="text-xs text-white mt-0.5 font-bold" id="announcementText">አሁን የተፈቀደው: ባጃጅ (BAJAJ) በቤንዚን ማድያ</p>
+        <p class="text-[10px] text-gray-400 mt-0.5">Drivers are served based on this category priority.</p>
+      </div>
+    </div>
+
+    <!-- Stations List -->
+    <div id="driverStationsContainer" class="space-y-2.5">
+      <!-- Injected by script -->
+    </div>
+  </main>
+
+  <!-- TAB 2: MY QUEUE TICKET -->
+  <main id="tabTicketScreen" class="hidden flex-1 p-4 flex flex-col justify-between">
+    <div class="space-y-4">
+      
+      <!-- 10-Minute Warning Alert Box -->
+      <div id="alertBox" class="hidden bg-red-600/20 border-2 border-red-500 rounded-2xl p-3.5 animate-alert-pulse">
+        <div class="flex items-center space-x-2.5">
+          <span class="text-2xl">🚨</span>
+          <div>
+            <h3 class="text-xs font-black text-red-400 uppercase tracking-wider">10-Minute Turn Alert!</h3>
+            <p class="text-xs text-white font-extrabold mt-0.5" id="alertVoiceText">ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Ticket Card -->
+      <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
+        <div class="text-[11px] font-bold text-amber-400 uppercase tracking-widest" id="ticketStationName">Benzene Madya Central</div>
+        <div class="text-5xl font-black text-white font-mono my-3" id="ticketTokenDisplay">#126</div>
+        
+        <div class="flex items-center justify-center space-x-2 text-xs">
+          <span class="bg-gray-800 text-gray-300 px-2.5 py-1 rounded font-mono" id="ticketPlateDisplay">AA-2-84920</span>
+          <span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded font-bold" id="ticketStatusDisplay">WAITING</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-gray-800">
+          <div class="bg-gray-950 rounded-2xl p-3">
+            <span class="text-[10px] text-gray-400 block">Vehicles Ahead</span>
+            <span class="text-2xl font-black text-amber-400 font-mono" id="ticketAheadDisplay">8</span>
+            <span class="text-[9px] text-gray-500">የሚቀድሙ ተሽከርካሪዎች</span>
+          </div>
+          <div class="bg-gray-950 rounded-2xl p-3">
+            <span class="text-[10px] text-gray-400 block">Wait Time</span>
+            <span class="text-2xl font-black text-sky-400 font-mono" id="ticketWaitDisplay">~14 min</span>
+            <span class="text-[9px] text-gray-500">የሚገመት የጥበቃ ጊዜ</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Audio Alert Button -->
+      <button onclick="playDriverAlert()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-95 text-gray-950 font-black text-xs rounded-2xl shadow-xl flex items-center justify-center gap-2 transition">
+        <span class="text-base">🔊</span>
+        <span>Test 10-Min Siren & Voice Cue</span>
+      </button>
+    </div>
+
+    <!-- Leave Queue -->
+    <button onclick="leaveQueue()" class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-red-400 font-semibold text-xs rounded-2xl border border-gray-800 transition">
+      Leave Queue (ከተራ ውጣ)
+    </button>
+  </main>
+
+  <!-- Join Modal -->
+  <div id="joinModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-end">
+    <div class="bg-gray-900 border border-gray-700 rounded-3xl p-5 space-y-3 max-w-md mx-auto w-full shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-extrabold text-white" id="modalTitle">Join Queue</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-gray-300 mb-1">Driver Phone Number (የስልክ ቁጥር)</label>
+        <input type="tel" id="inputPhone" value="0916123456" class="w-full bg-gray-950 border border-gray-700 text-white font-mono rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-gray-300 mb-1">Ethiopian License Plate (የሰሌዳ ቁጥር)</label>
+        <input type="text" id="inputPlate" value="AA-2-84920" class="w-full bg-gray-950 border border-gray-700 text-amber-400 uppercase font-mono font-bold rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      </div>
+
+      <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[10px] text-amber-300">
+        ℹ️ Vehicle category is set by station coordinators. You are entering the currently active lane.
+      </div>
+
+      <button onclick="confirmJoin()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs rounded-xl shadow-lg transition">
+        Confirm & Take Ticket (ተራ ያዝ)
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let isAmharic = true;
+    let selectedStationId = "benzene_madya";
+    let activeTicket = {
+      stationId: "benzene_madya",
+      ticketNumber: 126,
+      licensePlate: "AA-2-84920",
+      category: "BAJAJ",
+      status: "WAITING"
+    };
+
+    const stations = [
+      { id: "benzene_madya", nameEn: "Benzene Madya Central", nameAm: "ቤንዚን ማድያ ዋና ጣቢያ", neighborhoodEn: "Piazza", neighborhoodAm: "ፒያሳ", distance: 1.2, benzene: "AVAILABLE", diesel: "AVAILABLE", congestion: "MODERATE", activeCat: "BAJAJ", serving: 118, last: 126, avgSec: 110 },
+      { id: "total_menahariya", nameEn: "TotalEnergies Menahariya", nameAm: "ቶታል ኢነርጂ መናኸሪያ", neighborhoodEn: "Bus Terminal", neighborhoodAm: "መናኸሪያ", distance: 2.1, benzene: "AVAILABLE", diesel: "AVAILABLE", congestion: "HEAVY", activeCat: "TAXI_MINIBUS", serving: 81, last: 95, avgSec: 220 },
+      { id: "noc_piassa", nameEn: "NOC Piassa Central", nameAm: "ኤን ኦ ሲ ፒያሳ መሀል", neighborhoodEn: "Piassa Center", neighborhoodAm: "ፒያሳ መሀል", distance: 0.8, benzene: "AVAILABLE", diesel: "LOW_STOCK", congestion: "LOW", activeCat: "BAJAJ", serving: 82, last: 88, avgSec: 100 },
+      { id: "ola_datto", nameEn: "Ola Energy Datto", nameAm: "ኦላ ኢነርጂ ዳቶ", neighborhoodEn: "Datto Industrial", neighborhoodAm: "ዳቶ", distance: 2.8, benzene: "OUT_OF_STOCK", diesel: "AVAILABLE", congestion: "LOW", activeCat: "TRUCK_HEAVY", serving: 11, last: 14, avgSec: 850 },
+      { id: "tabor_oil", nameEn: "National Oil Tabor", nameAm: "ናሽናል ኦይል ታቦር", neighborhoodEn: "Mount Tabor", neighborhoodAm: "ታቦር", distance: 3.3, benzene: "AVAILABLE", diesel: "AVAILABLE", congestion: "MODERATE", activeCat: "CAR", serving: 30, last: 35, avgSec: 190 }
+    ];
+
+    // Shared BroadcastChannel for zero-latency local communication
+    const bus = new BroadcastChannel("hawassa_queue_bus");
+    bus.onmessage = (e) => {
+      const data = e.data;
+      if (!data) return;
+      if (data.type === "PERMITTED_CATEGORY_CHANGED") {
+        const st = stations.find(s => s.id === data.stationId);
+        if (st) st.activeCat = data.activePermittedCategory;
+        renderRadar();
+      } else if (data.type === "QUEUE_ADVANCED") {
+        const st = stations.find(s => s.id === data.stationId);
+        if (st) st.serving = data.currentlyServing;
+        renderRadar();
+        renderTicket();
+      } else if (data.type === "TEN_MINUTE_ALERT_BROADCAST") {
+        playDriverAlert();
+      }
+    };
+
+    // Real-Time Cloud SSE Stream via HawassaCloudSync
+    if (window.HawassaCloudSync) {
+      window.HawassaCloudSync.initRealtimeStream((connected, msg) => {
+        // Connected to live cloud
+      });
+      window.HawassaCloudSync.onEvent((d) => {
+        if (!d) return;
+        if (d.type === "PERMITTED_CATEGORY_CHANGED") {
+          const st = stations.find(s => s.id === d.stationId);
+          if (st) st.activeCat = d.activePermittedCategory;
+          renderRadar();
+        } else if (d.type === "QUEUE_ADVANCED") {
+          const st = stations.find(s => s.id === d.stationId);
+          if (st) st.serving = d.currentlyServing;
+          renderRadar();
+          renderTicket();
+        } else if (d.type === "TEN_MINUTE_ALERT_BROADCAST") {
+          playDriverAlert();
+        }
+      });
+    }
+
+    function toggleLang() {
+      isAmharic = !isAmharic;
+      document.getElementById('langBtnText').textContent = isAmharic ? 'English' : 'አማርኛ';
+      renderRadar();
+      renderTicket();
+    }
+
+    function switchTab(tab) {
+      if (tab === 'radar') {
+        document.getElementById('tabRadarScreen').classList.remove('hidden');
+        document.getElementById('tabTicketScreen').classList.add('hidden');
+        document.getElementById('btnTabRadar').className = "px-2 py-1 text-[11px] font-bold rounded bg-amber-500 text-gray-950";
+        document.getElementById('btnTabTicket').className = "px-2 py-1 text-[11px] font-bold rounded text-gray-400";
+      } else {
+        document.getElementById('tabRadarScreen').classList.add('hidden');
+        document.getElementById('tabTicketScreen').classList.remove('hidden');
+        document.getElementById('btnTabRadar').className = "px-2 py-1 text-[11px] font-bold rounded text-gray-400";
+        document.getElementById('btnTabTicket').className = "px-2 py-1 text-[11px] font-bold rounded bg-amber-500 text-gray-950";
+        renderTicket();
+      }
+    }
+
+    function renderRadar() {
+      const container = document.getElementById('driverStationsContainer');
+      container.innerHTML = '';
+      stations.forEach(st => {
+        const card = document.createElement('div');
+        card.className = "bg-gray-900 border border-gray-800 rounded-2xl p-3 space-y-2";
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <h3 class="text-xs font-bold text-white">${isAmharic ? st.nameAm : st.nameEn}</h3>
+              <p class="text-[10px] text-gray-400">${isAmharic ? st.neighborhoodAm : st.neighborhoodEn} • ${st.distance} km</p>
+            </div>
+            <span class="text-[9px] font-mono px-2 py-0.5 rounded ${st.congestion === 'LOW' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">${st.congestion}</span>
+          </div>
+          <div class="bg-gray-950 border border-gray-800/80 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[10px]">
+            <span class="text-amber-400 font-bold">${isAmharic ? 'የተፈቀደው: ' : 'Permitted: '} ${st.activeCat}</span>
+            <span class="text-gray-400 font-mono">#${st.serving} / #${st.last}</span>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <div class="text-[9px] font-bold space-x-1">
+              <span class="${st.benzene === 'AVAILABLE' ? 'text-emerald-400' : 'text-red-400'}">⛽ Benzene</span>
+              <span class="text-gray-600">•</span>
+              <span class="${st.diesel === 'AVAILABLE' ? 'text-emerald-400' : 'text-amber-400'}">🛢️ Diesel</span>
+            </div>
+            <button onclick="openModal('${st.id}')" class="px-3 py-1 bg-amber-500 text-gray-950 font-bold text-[10px] rounded-lg">
+              ${isAmharic ? 'ተራ ያዝ' : 'Join'}
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      const bst = stations[0];
+      document.getElementById('announcementText').textContent = isAmharic
+        ? `አሁን የተፈቀደው: ${bst.activeCat} በ${bst.nameAm}`
+        : `Now Serving: ${bst.activeCat} at ${bst.nameEn}`;
+    }
+
+    function openModal(id) {
+      selectedStationId = id;
+      const st = stations.find(s => s.id === id);
+      document.getElementById('modalTitle').textContent = isAmharic ? `${st.nameAm} ተራ መያዣ` : `Join ${st.nameEn}`;
+      document.getElementById('joinModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('joinModal').classList.add('hidden');
+    }
+
+    function confirmJoin() {
+      const phone = document.getElementById('inputPhone').value.trim();
+      const plate = document.getElementById('inputPlate').value.trim().toUpperCase();
+      if (!phone || !plate) return;
+
+      const st = stations.find(s => s.id === selectedStationId);
+      st.last += 1;
+      activeTicket = {
+        stationId: st.id,
+        ticketNumber: st.last,
+        licensePlate: plate,
+        category: st.activeCat,
+        status: "WAITING"
+      };
+
+      closeModal();
+      switchTab('ticket');
+      toast(`Ticket #${st.last} issued`);
+    }
+
+    function leaveQueue() {
+      activeTicket.status = "CANCELLED";
+      switchTab('radar');
+      toast("Left queue");
+    }
+
+    function renderTicket() {
+      if (!activeTicket) return;
+      const st = stations.find(s => s.id === activeTicket.stationId) || stations[0];
+      document.getElementById('ticketStationName').textContent = isAmharic ? st.nameAm : st.nameEn;
+      document.getElementById('ticketTokenDisplay').textContent = '#' + activeTicket.ticketNumber;
+      document.getElementById('ticketPlateDisplay').textContent = activeTicket.licensePlate;
+
+      const ahead = Math.max(0, activeTicket.ticketNumber - st.serving);
+      document.getElementById('ticketAheadDisplay').textContent = ahead;
+      const waitMin = Math.max(1, Math.floor((ahead * st.avgSec) / 60));
+      document.getElementById('ticketWaitDisplay').textContent = `~${waitMin} min`;
+
+      const alertBox = document.getElementById('alertBox');
+      if (ahead <= 3 || waitMin <= 10) {
+        alertBox.classList.remove('hidden');
+      } else {
+        alertBox.classList.add('hidden');
+      }
+    }
+
+    function playDriverAlert() {
+      // Audio siren tone
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+          osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.6);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 1.0);
+        }
+      } catch(e){}
+
+      if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]);
+
+      // Voice
+      setTimeout(() => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const txt = isAmharic ? "ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!" : "Your turn will arrive in 10 minutes; please come to the station!";
+          const ut = new SpeechSynthesisUtterance(txt);
+          ut.lang = isAmharic ? 'am-ET' : 'en-US';
+          window.speechSynthesis.speak(ut);
+        }
+      }, 500);
+
+      toast(isAmharic ? "🚨 ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት!" : "🚨 10-Minute Warning!");
+    }
+
+    function toast(m) {
+      const b = document.getElementById('toastBox');
+      document.getElementById('toastMsg').textContent = m;
+      b.classList.remove('hidden');
+      clearTimeout(b._t);
+      b._t = setTimeout(() => b.classList.add('hidden'), 3500);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.HawassaSharedStore) {
+        window.HawassaSharedStore.subscribe((updatedStations) => {
+          stations = updatedStations.map(st => {
+            const cat = st.activePermittedCategory || "BAJAJ";
+            const lane = (st.lanes && st.lanes[cat]) ? st.lanes[cat] : { currentlyServing: 100, lastAssigned: 100, avgSec: 120 };
+            return {
+              id: st.id,
+              nameEn: st.nameEn,
+              nameAm: st.nameAm,
+              neighborhoodEn: st.neighborhoodEn || st.neighborhood || "",
+              neighborhoodAm: st.neighborhoodAm || "",
+              distance: st.distanceKm || st.distance || 1.2,
+              benzene: st.benzeneStatus,
+              diesel: st.dieselStatus,
+              congestion: st.congestion || st.congestionLevel || "MODERATE",
+              activeCat: cat,
+              serving: lane.currentlyServing || 100,
+              last: lane.lastAssigned || 100,
+              avgSec: lane.avgSec || lane.avgDurationSeconds || 120
+            };
+          });
+          renderRadar();
+          renderTicket();
+        });
+      }
+      renderRadar();
+      renderTicket();
+    });
+  </script>
+</body>
+</html>
