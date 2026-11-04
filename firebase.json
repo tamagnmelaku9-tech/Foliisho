@@ -1,6 +1,6 @@
 {
   "firestore": {
-    "database": "ai-studio-android-foliisho-78f183cd-1cbb-4fc7-907e-4587a16e4959",
+    "database": "(default)",
     "rules": "firestore.rules"
   },
   "hosting": {

@@ -4,7 +4,7 @@
  * via Firebase Realtime Database & SSE Streaming
  */
 
-const DEFAULT_FIREBASE_RTDB_URL = "https://hawassa-transit-default-rtdb.firebaseio.com";
+const DEFAULT_FIREBASE_RTDB_URL = "https://foliisho-default-rtdb.firebaseio.com";
 const LOCAL_BUS_NAME = "hawassa_queue_bus";
 
 class HawassaCloudSyncClient {

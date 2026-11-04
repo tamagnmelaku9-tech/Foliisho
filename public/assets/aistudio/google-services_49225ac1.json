@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "627677419836",
+    "project_id": "foliisho",
+    "storage_bucket": "foliisho.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:627677419836:android:26b264cafbcbe729a1e639",
+        "android_client_info": {
+          "package_name": "com.aistudio.hawassaqueue.tzqm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBp_QKLNhTiVLKhDbcWniRPnkvJwEQ8H8Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

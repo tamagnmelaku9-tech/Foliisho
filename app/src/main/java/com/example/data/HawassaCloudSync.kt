@@ -49,7 +49,7 @@ class HawassaCloudSync(
                 if (clean.endsWith(".json")) clean else "$clean/stations.json"
             }
             clean.startsWith("http") -> clean
-            else -> "https://hawassa-transit-default-rtdb.firebaseio.com/stations.json"
+            else -> "https://foliisho-default-rtdb.firebaseio.com/stations.json"
         }
     }
 
