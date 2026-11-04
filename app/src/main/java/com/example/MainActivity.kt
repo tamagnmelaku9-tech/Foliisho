@@ -29,11 +29,13 @@ import com.example.ui.screens.JoinQueueDialog
 import com.example.ui.screens.LiveQueueScreen
 import com.example.ui.screens.StationRadarScreen
 import com.example.ui.theme.HawassaTransitTheme
+import com.example.util.configureAppCheck
 import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         setContent {
             HawassaTransitTheme {
@@ -53,6 +55,12 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
     val isOnline by viewModel.isOnline.collectAsState()
     val lastSyncTime by viewModel.lastSyncTime.collectAsState()
     val joinDialogStation by viewModel.joinDialogStation.collectAsState()
+
+    // Gemini 3.8 Flash AI Assistant States
+    val aiDialogVisible by viewModel.aiDialogVisible.collectAsState()
+    val aiQueryLoading by viewModel.aiQueryLoading.collectAsState()
+    val aiResponse by viewModel.aiResponse.collectAsState()
+    val aiLastQuery by viewModel.aiLastQuery.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -82,7 +90,8 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
                 hasActiveTicket = currentTicket != null,
                 onToggleLanguage = { viewModel.toggleLanguage() },
                 onToggleNetwork = { viewModel.toggleNetwork() },
-                onNavigate = { screen -> viewModel.setScreen(screen) }
+                onNavigate = { screen -> viewModel.setScreen(screen) },
+                onOpenAi = { viewModel.openAiDialog() }
             )
         }
     ) { innerPadding ->
@@ -103,7 +112,8 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
                         },
                         onJoinStationQueue = { station ->
                             viewModel.openJoinDialog(station)
-                        }
+                        },
+                        onOpenAi = { viewModel.openAiDialog() }
                     )
                 }
 
@@ -125,7 +135,8 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
                             selectedCategory = selectedCategory,
                             language = language,
                             onCategorySelected = { viewModel.setCategoryFilter(it) },
-                            onJoinStationQueue = { viewModel.openJoinDialog(it) }
+                            onJoinStationQueue = { viewModel.openJoinDialog(it) },
+                            onOpenAi = { viewModel.openAiDialog() }
                         )
                     }
                 }
@@ -140,6 +151,18 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
                     onConfirm = { stationId, name, phone, plate ->
                         viewModel.submitJoinQueue(stationId, name, phone, plate)
                     }
+                )
+            }
+
+            // Gemini 3.8 Flash AI Transit & Fuel Assistant Dialog
+            if (aiDialogVisible) {
+                com.example.ui.components.HawassaAiAssistantDialog(
+                    language = language,
+                    isLoading = aiQueryLoading,
+                    aiResponse = aiResponse,
+                    lastQuery = aiLastQuery,
+                    onDismiss = { viewModel.closeAiDialog() },
+                    onSubmitQuery = { query -> viewModel.submitAiQuery(query) }
                 )
             }
         }

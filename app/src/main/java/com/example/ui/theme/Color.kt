@@ -12,6 +12,8 @@ val DarkCharcoalBg = Color(0xFF101418)
 val SlateCardSurface = Color(0xFF1B2228)
 val SlateCardBorder = Color(0xFF2C353D)
 val SurfaceElevated = Color(0xFF242C34)
+val DeepNavy = Color(0xFF0F172A)
+val DarkSlate = Color(0xFF1E293B)
 
 // Semantic Accents
 val EmeraldAvailable = Color(0xFF00E676)

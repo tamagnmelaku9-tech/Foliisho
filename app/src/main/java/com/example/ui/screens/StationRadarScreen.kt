@@ -2,7 +2,9 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,18 +65,86 @@ fun StationRadarScreen(
     selectedCategory: VehicleCategory,
     language: Language,
     onCategorySelected: (VehicleCategory) -> Unit,
-    onJoinStationQueue: (StationInfo) -> Unit
+    onJoinStationQueue: (StationInfo) -> Unit,
+    onOpenAi: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // AI Transit & Fuel Queue Assistant Banner
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(SolarAmber.copy(alpha = 0.12f))
+                .border(1.dp, SolarAmber.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                .clickable { onOpenAi() }
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .testTag("ai_radar_banner")
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(SolarAmber),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (language == Language.AMHARIC) "የሐዋሳ AI ረዳት (Gemini 3.8)" else "Hawassa AI Dispatcher (Gemini 3.8)",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = SolarAmber
+                        )
+                        Text(
+                            text = if (language == Language.AMHARIC) "ፈጣን ወረፋ እና ነዳጅ ያለበትን ጣቢያ ይጠይቁ" else "Tap to ask for fastest fuel queue or least congested station",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextPrimary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SolarAmber)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = if (language == Language.AMHARIC) "ጠይቅ" else "Ask AI",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextOnAmber,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
         // Vehicle Category Horizontal Filter Chips
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
             Text(
                 text = if (language == Language.AMHARIC) "የተሽከርካሪ አይነት ይምረጡ:" else "Filter by Vehicle Type:",

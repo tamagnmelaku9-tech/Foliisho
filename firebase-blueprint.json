@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "Station": {
+      "title": "Station",
+      "description": "Public Hawassa transit & fuel station real-time status",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the station"
+        },
+        "nameEn": {
+          "type": "string",
+          "description": "English name of the station"
+        },
+        "nameAm": {
+          "type": "string",
+          "description": "Amharic name of the station"
+        },
+        "currentCategory": {
+          "type": "string",
+          "description": "Currently permitted vehicle category announced by station coordinator"
+        },
+        "currentlyServing": {
+          "type": "integer",
+          "description": "Queue number currently being served at the station"
+        },
+        "totalQueued": {
+          "type": "integer",
+          "description": "Total count of vehicles queued at the station"
+        },
+        "benzeneAvailable": {
+          "type": "boolean",
+          "description": "Availability status of Benzene/Regular petrol"
+        },
+        "dieselAvailable": {
+          "type": "boolean",
+          "description": "Availability status of Diesel fuel"
+        },
+        "status": {
+          "type": "string",
+          "description": "Operating status of station: OPEN, PAUSED, CLOSED"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last station coordinator announcement"
+        }
+      },
+      "required": ["id", "nameEn", "nameAm", "currentCategory", "currentlyServing", "benzeneAvailable", "dieselAvailable"]
+    },
+    "QueueTicket": {
+      "title": "QueueTicket",
+      "description": "Active or historical queue ticket created by a vehicle driver",
+      "type": "object",
+      "properties": {
+        "ticketId": {
+          "type": "string",
+          "description": "Unique identifier of the ticket"
+        },
+        "stationId": {
+          "type": "string",
+          "description": "Reference to the target station"
+        },
+        "vehicleCategory": {
+          "type": "string",
+          "description": "Vehicle category: BAJAJ, MINIBUS_TAXI, CITY_BUS, etc."
+        },
+        "driverName": {
+          "type": "string",
+          "description": "Driver full name"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "Driver contact phone number"
+        },
+        "licensePlate": {
+          "type": "string",
+          "description": "Official vehicle license plate"
+        },
+        "ticketNumber": {
+          "type": "integer",
+          "description": "Sequential queue ticket number"
+        },
+        "status": {
+          "type": "string",
+          "description": "Ticket status: WAITING, CALLED, SERVED, CANCELLED"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Authenticated user id of the driver"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when driver joined the queue"
+        }
+      },
+      "required": ["ticketId", "stationId", "vehicleCategory", "driverName", "phoneNumber", "licensePlate", "ticketNumber", "status"]
+    },
+    "AiLog": {
+      "title": "AiLog",
+      "description": "Log of Gemini AI Hawassa transit recommendations and queries",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique log entry id"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Driver or coordinator transit inquiry"
+        },
+        "response": {
+          "type": "string",
+          "description": "Gemini 3.8 Flash AI recommendation"
+        },
+        "language": {
+          "type": "string",
+          "description": "Language used: AMHARIC or ENGLISH"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User id of requester if authenticated"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of AI analysis"
+        }
+      },
+      "required": ["id", "prompt", "response", "language", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/stations/{stationId}": {
+      "schema": { "$ref": "#/entities/Station" },
+      "description": "Real-time Hawassa station announcements, active categories, and fuel availability"
+    },
+    "/tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/QueueTicket" },
+      "description": "Queue tickets for drivers waiting at stations"
+    },
+    "/ai_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AiLog" },
+      "description": "Gemini AI transit optimization queries and insights"
+    }
+  }
+}

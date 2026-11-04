@@ -98,3 +98,11 @@ This update resolves the disconnect by establishing a persistent cloud state hub
    - Verify zero build warnings or lint errors with `compile_applet`.
    - Generate production-ready APK binary and serve via `/download/hawassa-transit-driver.apk`.
    - Update `DEPLOYMENT_GUIDE.md` with instructions on redeploying to Vercel and installing the APK on phones.
+
+4. **Firebase & Gemini API Integration (Completed)**:
+   - [x] Backend Provisioning via `ProvisionFirebase` with project `gen-lang-client-0680075947` (Firestore & AI Logic)
+   - [x] App Check wiring in `MainActivity.onCreate()` using `configureAppCheck(this, intent)`
+   - [x] Firestore security rules (`firestore.rules`) and intermediate blueprint (`firebase-blueprint.json`) with zero-trust schema validation deployed via `DeployRules`
+   - [x] Gemini 3.8 Flash Hawassa Transit AI Assistant (`Firebase.ai`) implemented in `HawassaAiAssistant.kt`
+   - [x] Interactive AI UI in Compose (`HawassaAiAssistantDialog.kt`) with quick suggestions, live station analysis, and bilingual Amharic/English response generation
+   - [x] Verified complete build with `compile_applet` (0 errors)

@@ -54,6 +54,20 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
     val isOnline: StateFlow<Boolean> = repository.isOnline
     val lastSyncTime: StateFlow<String> = repository.lastSyncTime
 
+    // Gemini 3.8 Flash AI Assistant States
+    private val aiAssistant = com.example.data.HawassaAiAssistant()
+    private val _aiDialogVisible = MutableStateFlow(false)
+    val aiDialogVisible: StateFlow<Boolean> = _aiDialogVisible.asStateFlow()
+
+    private val _aiQueryLoading = MutableStateFlow(false)
+    val aiQueryLoading: StateFlow<Boolean> = _aiQueryLoading.asStateFlow()
+
+    private val _aiResponse = MutableStateFlow<String?>(null)
+    val aiResponse: StateFlow<String?> = _aiResponse.asStateFlow()
+
+    private val _aiLastQuery = MutableStateFlow("")
+    val aiLastQuery: StateFlow<String> = _aiLastQuery.asStateFlow()
+
     init {
         // Monitor ticket headway to auto-trigger 10-minute warning
         viewModelScope.launch {
@@ -205,6 +219,44 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleNetwork() {
         repository.toggleNetworkConnection()
+    }
+
+    fun openAiDialog(initialQuery: String = "") {
+        _aiLastQuery.value = initialQuery
+        _aiDialogVisible.value = true
+        if (initialQuery.isNotBlank() && _aiResponse.value == null) {
+            submitAiQuery(initialQuery)
+        }
+    }
+
+    fun closeAiDialog() {
+        _aiDialogVisible.value = false
+    }
+
+    fun submitAiQuery(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        _aiLastQuery.value = trimmed
+        _aiQueryLoading.value = true
+        viewModelScope.launch {
+            try {
+                val advice = aiAssistant.askAssistant(
+                    stations = stations.value,
+                    userQuery = trimmed,
+                    language = _language.value,
+                    selectedCategory = _selectedCategoryFilter.value
+                )
+                _aiResponse.value = advice
+            } catch (e: Exception) {
+                _aiResponse.value = if (_language.value == Language.AMHARIC) {
+                    "የ AI ረዳት ምላሽ መስጠት አልቻለም: ${e.localizedMessage}"
+                } else {
+                    "AI Assistant error: ${e.localizedMessage}"
+                }
+            } finally {
+                _aiQueryLoading.value = false
+            }
+        }
     }
 
     override fun onCleared() {

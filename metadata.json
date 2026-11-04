@@ -1,6 +1,6 @@
 {
-  "name": "Hawassa Transit Queue",
-  "description": "Smart queue management and automated notification system for Hawassa transit and fuel stations.",
+  "name": "Foliisho",
+  "description": "Smart queue management and Gemini AI transit advisor for Hawassa transit and fuel stations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

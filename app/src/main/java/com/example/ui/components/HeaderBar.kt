@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Translate
@@ -48,7 +49,8 @@ fun HeaderBar(
     hasActiveTicket: Boolean,
     onToggleLanguage: () -> Unit,
     onToggleNetwork: () -> Unit,
-    onNavigate: (AppScreen) -> Unit
+    onNavigate: (AppScreen) -> Unit,
+    onOpenAi: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -98,8 +100,37 @@ fun HeaderBar(
                 }
             }
 
-            // Actions: Language Toggle & Driver Active Ticket Badge
+            // Actions: Gemini AI, Language Toggle & Driver Active Ticket Badge
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Gemini AI Dispatcher Button
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, SolarAmber.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                        .clickable { onOpenAi() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("ai_assistant_top_btn")
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Gemini AI",
+                            tint = SolarAmber,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (language == Language.AMHARIC) "AI" else "AI",
+                            color = SolarAmber,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 // Language Switcher
                 Box(
                     modifier = Modifier
