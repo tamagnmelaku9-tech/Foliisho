@@ -55,6 +55,8 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
     val isOnline by viewModel.isOnline.collectAsState()
     val lastSyncTime by viewModel.lastSyncTime.collectAsState()
     val joinDialogStation by viewModel.joinDialogStation.collectAsState()
+    val isJoiningQueue by viewModel.isJoiningQueue.collectAsState()
+    val joinDialogError by viewModel.joinDialogError.collectAsState()
 
     // Gemini 3.8 Flash AI Assistant States
     val aiDialogVisible by viewModel.aiDialogVisible.collectAsState()
@@ -147,6 +149,8 @@ fun TransitApp(viewModel: TransitViewModel = viewModel()) {
                 JoinQueueDialog(
                     station = joinDialogStation!!,
                     language = language,
+                    isSubmitting = isJoiningQueue,
+                    remoteError = joinDialogError,
                     onDismiss = { viewModel.closeJoinDialog() },
                     onConfirm = { stationId, name, phone, plate ->
                         viewModel.submitJoinQueue(stationId, name, phone, plate)

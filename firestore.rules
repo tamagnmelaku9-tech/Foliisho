@@ -2,27 +2,59 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isValidFuelStatus(val) {
+      return val in ['AVAILABLE', 'LOW_STOCK', 'OUT_OF_STOCK'];
+    }
+
+    function isValidCategory(val) {
+      return val in ['BAJAJ', 'TAXI_MINIBUS', 'PUBLIC_BUS', 'CAR', 'MOTORCYCLE', 'TRUCK_HEAVY', 'ALL'];
+    }
+
+    function isValidTicketStatus(val) {
+      return val in ['WAITING', 'CALLED', 'SERVING', 'COMPLETED', 'SKIPPED', 'CANCELLED'];
+    }
+
     function isValidStation(data) {
-      return data.keys().hasAll(['id', 'nameEn', 'nameAm', 'currentCategory', 'currentlyServing', 'benzeneAvailable', 'dieselAvailable'])
+      return data.keys().hasAll([
+          'id',
+          'nameEn',
+          'nameAm',
+          'activePermittedCategory',
+          'benzeneStatus',
+          'dieselStatus',
+          'lanes'
+        ])
         && data.id is string
         && data.nameEn is string
         && data.nameAm is string
-        && data.currentCategory is string
-        && data.currentlyServing is int
-        && data.benzeneAvailable is bool
-        && data.dieselAvailable is bool;
+        && isValidCategory(data.activePermittedCategory)
+        && isValidFuelStatus(data.benzeneStatus)
+        && isValidFuelStatus(data.dieselStatus)
+        && data.lanes is map;
     }
 
     function isValidQueueTicket(data) {
-      return data.keys().hasAll(['ticketId', 'stationId', 'vehicleCategory', 'driverName', 'phoneNumber', 'licensePlate', 'ticketNumber', 'status'])
+      return data.keys().hasAll([
+          'ticketId',
+          'stationId',
+          'vehicleCategory',
+          'driverName',
+          'phoneNumber',
+          'licensePlate',
+          'ticketNumber',
+          'status'
+        ])
         && data.ticketId is string
         && data.stationId is string
-        && data.vehicleCategory is string
+        && isValidCategory(data.vehicleCategory)
         && data.driverName is string
         && data.phoneNumber is string
+        && data.phoneNumber.size() >= 9
         && data.licensePlate is string
+        && data.licensePlate.size() >= 4
         && data.ticketNumber is int
-        && data.status is string;
+        && data.ticketNumber > 0
+        && isValidTicketStatus(data.status);
     }
 
     function isValidAiLog(data) {
@@ -34,21 +66,23 @@ service cloud.firestore {
         && data.timestamp is string;
     }
 
-    // Public real-time transit & fuel station radar
+    // 1. Hawassa Transit & Fuel Station Radar
+    // Shared between Drivers (atomic ticket number increment on join) and Coordinators (category, call next, fuel status)
     match /stations/{stationId} {
       allow read: if true;
-      allow write: if request.auth != null && isValidStation(request.resource.data);
-    }
-
-    // Driver queue tickets
-    match /tickets/{ticketId} {
-      allow read: if true;
-      allow create: if isValidQueueTicket(request.resource.data);
-      allow update: if isValidQueueTicket(request.resource.data);
+      allow create, update: if isValidStation(request.resource.data);
       allow delete: if request.auth != null;
     }
 
-    // AI transit optimization query history
+    // 2. Driver Queue Tickets
+    // Drivers book slots instantly without login; Coordinators read live queue & update status (CALLED / COMPLETED / CANCELLED)
+    match /tickets/{ticketId} {
+      allow read: if true;
+      allow create, update: if isValidQueueTicket(request.resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    // 3. Gemini AI Transit Advice History
     match /ai_logs/{logId} {
       allow read, write: if request.auth != null && isValidAiLog(request.resource.data);
     }

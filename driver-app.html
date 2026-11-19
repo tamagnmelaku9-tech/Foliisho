@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Hawassa Transit Driver - Mobile Web App</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/shared-store.js"></script>
-  <script src="/cloud-sync.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="/firestore-sync.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
@@ -29,15 +30,18 @@
         ⛽
       </div>
       <div>
-        <h1 class="text-xs font-black text-white">Hawassa Driver Radar</h1>
-        <p class="text-[10px] text-gray-400">ቤንዚን ማድያ እና ጣቢያዎች</p>
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-xs font-black text-white">Hawassa Driver Radar</h1>
+          <span id="liveCloudDot" class="w-2 h-2 rounded-full bg-amber-400" title="Firestore Sync Status"></span>
+        </div>
+        <p class="text-[10px] text-gray-400" id="cloudSyncSubtitle">Connecting to Firestore...</p>
       </div>
     </div>
 
     <div class="flex items-center space-x-2">
       <!-- Language Toggle -->
       <button onclick="toggleLang()" class="px-2.5 py-1 bg-gray-800 text-amber-400 border border-gray-700 text-xs font-bold rounded-lg transition">
-        <span id="langBtnText">አማርኛ</span>
+        <span id="langBtnText">English</span>
       </button>
 
       <!-- View Switcher -->
@@ -53,7 +57,7 @@
   </header>
 
   <!-- Notification Toast -->
-  <div id="toastBox" class="fixed top-16 left-4 right-4 z-50 hidden bg-gray-900 border border-amber-500 text-white text-xs p-3 rounded-xl shadow-2xl flex items-center space-x-2">
+  <div id="toastBox" class="fixed top-16 left-4 right-4 max-w-md mx-auto z-50 hidden bg-gray-900 border border-amber-500 text-white text-xs p-3 rounded-xl shadow-2xl flex items-center space-x-2">
     <span class="text-amber-400 text-base">📢</span>
     <span id="toastMsg">Alert</span>
   </div>
@@ -65,8 +69,8 @@
       <span class="text-xl">📢</span>
       <div>
         <h2 class="text-xs font-black text-amber-400 uppercase tracking-wide">Coordinator Announcement</h2>
-        <p class="text-xs text-white mt-0.5 font-bold" id="announcementText">አሁን የተፈቀደው: ባጃጅ (BAJAJ) በቤንዚን ማድያ</p>
-        <p class="text-[10px] text-gray-400 mt-0.5">Drivers are served based on this category priority.</p>
+        <p class="text-xs text-white mt-0.5 font-bold" id="announcementText">አሁን የተፈቀደው: BAJAJ በቤንዚን ማድያ</p>
+        <p class="text-[10px] text-gray-400 mt-0.5">Live synced from Cloud Firestore (project: foliisho).</p>
       </div>
     </div>
 
@@ -78,14 +82,24 @@
 
   <!-- TAB 2: MY QUEUE TICKET -->
   <main id="tabTicketScreen" class="hidden flex-1 p-4 flex flex-col justify-between">
-    <div class="space-y-4">
-      
+    <!-- Empty Ticket Placeholder -->
+    <div id="noTicketCard" class="hidden flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3">
+      <div class="text-4xl">🎫</div>
+      <h3 class="text-sm font-bold text-white" id="noTicketTitle">No Active Queue Ticket</h3>
+      <p class="text-xs text-gray-400" id="noTicketSubtitle">Select a Hawassa station on the Stations tab and tap Join Queue to reserve your slot.</p>
+      <button onclick="switchTab('radar')" class="px-4 py-2 bg-amber-500 text-gray-950 font-bold text-xs rounded-xl">
+        Browse Stations
+      </button>
+    </div>
+
+    <!-- Active Ticket Details -->
+    <div id="activeTicketSection" class="space-y-4">
       <!-- 10-Minute Warning Alert Box -->
       <div id="alertBox" class="hidden bg-red-600/20 border-2 border-red-500 rounded-2xl p-3.5 animate-alert-pulse">
         <div class="flex items-center space-x-2.5">
           <span class="text-2xl">🚨</span>
           <div>
-            <h3 class="text-xs font-black text-red-400 uppercase tracking-wider">10-Minute Turn Alert!</h3>
+            <h3 class="text-xs font-black text-red-400 uppercase tracking-wider" id="alertHeading">10-Minute Turn Alert!</h3>
             <p class="text-xs text-white font-extrabold mt-0.5" id="alertVoiceText">ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!</p>
           </div>
         </div>
@@ -94,22 +108,23 @@
       <!-- Live Ticket Card -->
       <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
         <div class="text-[11px] font-bold text-amber-400 uppercase tracking-widest" id="ticketStationName">Benzene Madya Central</div>
-        <div class="text-5xl font-black text-white font-mono my-3" id="ticketTokenDisplay">#126</div>
-        
-        <div class="flex items-center justify-center space-x-2 text-xs">
+        <div class="text-5xl font-black text-white font-mono my-3" id="ticketTokenDisplay">#--</div>
+
+        <div class="flex flex-wrap items-center justify-center gap-2 text-xs">
           <span class="bg-gray-800 text-gray-300 px-2.5 py-1 rounded font-mono" id="ticketPlateDisplay">AA-2-84920</span>
+          <span class="bg-gray-800 text-amber-300 px-2.5 py-1 rounded font-bold" id="ticketCatDisplay">BAJAJ</span>
           <span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded font-bold" id="ticketStatusDisplay">WAITING</span>
         </div>
 
         <div class="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-gray-800">
           <div class="bg-gray-950 rounded-2xl p-3">
             <span class="text-[10px] text-gray-400 block">Vehicles Ahead</span>
-            <span class="text-2xl font-black text-amber-400 font-mono" id="ticketAheadDisplay">8</span>
+            <span class="text-2xl font-black text-amber-400 font-mono" id="ticketAheadDisplay">0</span>
             <span class="text-[9px] text-gray-500">የሚቀድሙ ተሽከርካሪዎች</span>
           </div>
           <div class="bg-gray-950 rounded-2xl p-3">
             <span class="text-[10px] text-gray-400 block">Wait Time</span>
-            <span class="text-2xl font-black text-sky-400 font-mono" id="ticketWaitDisplay">~14 min</span>
+            <span class="text-2xl font-black text-sky-400 font-mono" id="ticketWaitDisplay">~1 min</span>
             <span class="text-[9px] text-gray-500">የሚገመት የጥበቃ ጊዜ</span>
           </div>
         </div>
@@ -118,12 +133,12 @@
       <!-- Test Audio Alert Button -->
       <button onclick="playDriverAlert()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-95 text-gray-950 font-black text-xs rounded-2xl shadow-xl flex items-center justify-center gap-2 transition">
         <span class="text-base">🔊</span>
-        <span>Test 10-Min Siren & Voice Cue</span>
+        <span>Test 10-Min Siren &amp; Voice Cue</span>
       </button>
     </div>
 
     <!-- Leave Queue -->
-    <button onclick="leaveQueue()" class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-red-400 font-semibold text-xs rounded-2xl border border-gray-800 transition">
+    <button id="btnLeaveQueue" onclick="leaveQueue()" class="hidden w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-red-400 font-semibold text-xs rounded-2xl border border-gray-800 transition mt-4">
       Leave Queue (ከተራ ውጣ)
     </button>
   </main>
@@ -136,6 +151,15 @@
         <button onclick="closeModal()" class="text-gray-400 hover:text-white text-lg">✕</button>
       </div>
 
+      <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[10px] text-amber-300" id="modalCategoryBanner">
+        ℹ️ Permitted Lane: <strong id="modalPermittedCatLabel">BAJAJ</strong> (set by Coordinator)
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-gray-300 mb-1">Driver Name (የአሽከርካሪ ስም - አማራጭ)</label>
+        <input type="text" id="inputDriverName" placeholder="e.g. Abebe" class="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      </div>
+
       <div>
         <label class="block text-[11px] font-bold text-gray-300 mb-1">Driver Phone Number (የስልክ ቁጥር)</label>
         <input type="tel" id="inputPhone" value="0916123456" class="w-full bg-gray-950 border border-gray-700 text-white font-mono rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
@@ -146,12 +170,10 @@
         <input type="text" id="inputPlate" value="AA-2-84920" class="w-full bg-gray-950 border border-gray-700 text-amber-400 uppercase font-mono font-bold rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
       </div>
 
-      <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[10px] text-amber-300">
-        ℹ️ Vehicle category is set by station coordinators. You are entering the currently active lane.
-      </div>
+      <div id="joinErrorBox" class="hidden p-2.5 bg-red-950/90 border border-red-700 rounded-xl text-[11px] text-red-200"></div>
 
-      <button onclick="confirmJoin()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs rounded-xl shadow-lg transition">
-        Confirm & Take Ticket (ተራ ያዝ)
+      <button id="btnConfirmJoin" onclick="confirmJoin()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs rounded-xl shadow-lg transition">
+        Confirm &amp; Take Ticket (ተራ ያዝ)
       </button>
     </div>
   </div>
@@ -159,61 +181,17 @@
   <script>
     let isAmharic = true;
     let selectedStationId = "benzene_madya";
-    let activeTicket = {
-      stationId: "benzene_madya",
-      ticketNumber: 126,
-      licensePlate: "AA-2-84920",
-      category: "BAJAJ",
-      status: "WAITING"
-    };
+    let activeTicket = null;
+    let stations = [];
+    let hasAutoAlerted = false;
 
-    const stations = [
-      { id: "benzene_madya", nameEn: "Benzene Madya Central", nameAm: "ቤንዚን ማድያ ዋና ጣቢያ", neighborhoodEn: "Piazza", neighborhoodAm: "ፒያሳ", distance: 1.2, benzene: "AVAILABLE", diesel: "AVAILABLE", congestion: "MODERATE", activeCat: "BAJAJ", serving: 118, last: 126, avgSec: 110 },
-      { id: "total_menahariya", nameEn: "TotalEnergies Menahariya", nameAm: "ቶታል ኢነርጂ መናኸሪያ", neighborhoodEn: "Bus Terminal", neighborhoodAm: "መናኸሪያ", distance: 2.1, benzene: "AVAILABLE", diesel: "AVAILABLE", congestion: "HEAVY", activeCat: "TAXI_MINIBUS", serving: 81, last: 95, avgSec: 220 },
-      { id: "noc_piassa", nameEn: "NOC Piassa Central", nameAm: "ኤን ኦ ሲ ፒያሳ መሀል", neighborhoodEn: "Piassa Center", neighborhoodAm: "ፒያሳ መሀል", distance: 0.8, benzene: "AVAILABLE", diesel: "LOW_STOCK", congestion: "LOW", activeCat: "BAJAJ", serving: 82, last: 88, avgSec: 100 },
-      { id: "ola_datto", nameEn: "Ola Energy Datto", nameAm: "ኦላ ኢነርጂ ዳቶ", neighborhoodEn: "Datto Industrial", neighborhoodAm: "ዳቶ", distance: 2.8, benzene: "OUT_OF_STOCK", diesel: "AVAILABLE", congestion: "LOW", activeCat: "TRUCK_HEAVY", serving: 11, last: 14, avgSec: 850 },
-      { id: "tabor_oil", nameEn: "National Oil Tabor", nameAm: "ናሽናል ኦይል ታቦር", neighborhoodEn: "Mount Tabor", neighborhoodAm: "ታቦር", distance: 3.3, benzene: "AVAILABLE", diesel: "AVAILABLE", congestion: "MODERATE", activeCat: "CAR", serving: 30, last: 35, avgSec: 190 }
-    ];
-
-    // Shared BroadcastChannel for zero-latency local communication
-    const bus = new BroadcastChannel("hawassa_queue_bus");
-    bus.onmessage = (e) => {
-      const data = e.data;
-      if (!data) return;
-      if (data.type === "PERMITTED_CATEGORY_CHANGED") {
-        const st = stations.find(s => s.id === data.stationId);
-        if (st) st.activeCat = data.activePermittedCategory;
-        renderRadar();
-      } else if (data.type === "QUEUE_ADVANCED") {
-        const st = stations.find(s => s.id === data.stationId);
-        if (st) st.serving = data.currentlyServing;
-        renderRadar();
-        renderTicket();
-      } else if (data.type === "TEN_MINUTE_ALERT_BROADCAST") {
-        playDriverAlert();
-      }
-    };
-
-    // Real-Time Cloud SSE Stream via HawassaCloudSync
-    if (window.HawassaCloudSync) {
-      window.HawassaCloudSync.initRealtimeStream((connected, msg) => {
-        // Connected to live cloud
-      });
-      window.HawassaCloudSync.onEvent((d) => {
-        if (!d) return;
-        if (d.type === "PERMITTED_CATEGORY_CHANGED") {
-          const st = stations.find(s => s.id === d.stationId);
-          if (st) st.activeCat = d.activePermittedCategory;
-          renderRadar();
-        } else if (d.type === "QUEUE_ADVANCED") {
-          const st = stations.find(s => s.id === d.stationId);
-          if (st) st.serving = d.currentlyServing;
-          renderRadar();
-          renderTicket();
-        } else if (d.type === "TEN_MINUTE_ALERT_BROADCAST") {
-          playDriverAlert();
-        }
-      });
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     function toggleLang() {
@@ -242,44 +220,54 @@
       const container = document.getElementById('driverStationsContainer');
       container.innerHTML = '';
       stations.forEach(st => {
+        const cat = st.activePermittedCategory || "BAJAJ";
+        const lane = (st.lanes && st.lanes[cat]) ? st.lanes[cat] : { currentlyServing: 0, lastAssigned: 0, isActive: true };
+        const isPaused = lane.isActive === false;
+        const congestion = st.congestionLevel || "MODERATE";
+
         const card = document.createElement('div');
         card.className = "bg-gray-900 border border-gray-800 rounded-2xl p-3 space-y-2";
         card.innerHTML = `
           <div class="flex items-start justify-between">
             <div>
-              <h3 class="text-xs font-bold text-white">${isAmharic ? st.nameAm : st.nameEn}</h3>
-              <p class="text-[10px] text-gray-400">${isAmharic ? st.neighborhoodAm : st.neighborhoodEn} • ${st.distance} km</p>
+              <h3 class="text-xs font-bold text-white">${escapeHtml(isAmharic ? st.nameAm : st.nameEn)}</h3>
+              <p class="text-[10px] text-gray-400">${escapeHtml(isAmharic ? st.neighborhoodAm : st.neighborhoodEn)} • ${escapeHtml(st.distanceKm)} km</p>
             </div>
-            <span class="text-[9px] font-mono px-2 py-0.5 rounded ${st.congestion === 'LOW' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">${st.congestion}</span>
+            <span class="text-[9px] font-mono px-2 py-0.5 rounded ${congestion === 'LOW' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">${escapeHtml(congestion)}</span>
           </div>
           <div class="bg-gray-950 border border-gray-800/80 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[10px]">
-            <span class="text-amber-400 font-bold">${isAmharic ? 'የተፈቀደው: ' : 'Permitted: '} ${st.activeCat}</span>
-            <span class="text-gray-400 font-mono">#${st.serving} / #${st.last}</span>
+            <span class="text-amber-400 font-bold">${isAmharic ? 'የተፈቀደው: ' : 'Permitted: '} ${escapeHtml(cat)}</span>
+            <span class="text-gray-400 font-mono">#${escapeHtml(lane.currentlyServing)} / #${escapeHtml(lane.lastAssigned)}</span>
           </div>
           <div class="flex items-center justify-between pt-1">
             <div class="text-[9px] font-bold space-x-1">
-              <span class="${st.benzene === 'AVAILABLE' ? 'text-emerald-400' : 'text-red-400'}">⛽ Benzene</span>
+              <span class="${st.benzeneStatus === 'AVAILABLE' ? 'text-emerald-400' : 'text-red-400'}">⛽ Benzene</span>
               <span class="text-gray-600">•</span>
-              <span class="${st.diesel === 'AVAILABLE' ? 'text-emerald-400' : 'text-amber-400'}">🛢️ Diesel</span>
+              <span class="${st.dieselStatus === 'AVAILABLE' ? 'text-emerald-400' : 'text-amber-400'}">🛢️ Diesel</span>
             </div>
-            <button onclick="openModal('${st.id}')" class="px-3 py-1 bg-amber-500 text-gray-950 font-bold text-[10px] rounded-lg">
-              ${isAmharic ? 'ተራ ያዝ' : 'Join'}
+            <button onclick="openModal('${escapeHtml(st.id)}')" ${isPaused ? 'disabled' : ''} class="px-3 py-1.5 ${isPaused ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-400 text-gray-950'} font-bold text-[10px] rounded-lg transition">
+              ${isPaused ? (isAmharic ? 'ቆሟል' : 'Paused') : (isAmharic ? 'ተራ ያዝ' : 'Join Queue')}
             </button>
           </div>
         `;
         container.appendChild(card);
       });
 
-      const bst = stations[0];
-      document.getElementById('announcementText').textContent = isAmharic
-        ? `አሁን የተፈቀደው: ${bst.activeCat} በ${bst.nameAm}`
-        : `Now Serving: ${bst.activeCat} at ${bst.nameEn}`;
+      if (stations.length > 0) {
+        const bst = stations[0];
+        document.getElementById('announcementText').textContent = isAmharic
+          ? `አሁን የተፈቀደው: ${bst.activePermittedCategory} በ${bst.nameAm}`
+          : `Now Serving: ${bst.activePermittedCategory} at ${bst.nameEn}`;
+      }
     }
 
     function openModal(id) {
       selectedStationId = id;
       const st = stations.find(s => s.id === id);
+      if (!st) return;
       document.getElementById('modalTitle').textContent = isAmharic ? `${st.nameAm} ተራ መያዣ` : `Join ${st.nameEn}`;
+      document.getElementById('modalPermittedCatLabel').textContent = st.activePermittedCategory || 'BAJAJ';
+      document.getElementById('joinErrorBox').classList.add('hidden');
       document.getElementById('joinModal').classList.remove('hidden');
     }
 
@@ -287,54 +275,132 @@
       document.getElementById('joinModal').classList.add('hidden');
     }
 
-    function confirmJoin() {
+    async function confirmJoin() {
+      const name = document.getElementById('inputDriverName').value.trim();
       const phone = document.getElementById('inputPhone').value.trim();
       const plate = document.getElementById('inputPlate').value.trim().toUpperCase();
-      if (!phone || !plate) return;
+      const errBox = document.getElementById('joinErrorBox');
+      const btn = document.getElementById('btnConfirmJoin');
 
-      const st = stations.find(s => s.id === selectedStationId);
-      st.last += 1;
-      activeTicket = {
-        stationId: st.id,
-        ticketNumber: st.last,
-        licensePlate: plate,
-        category: st.activeCat,
-        status: "WAITING"
-      };
+      errBox.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = isAmharic ? 'በመመዝገብ ላይ...' : 'Saving to Firestore...';
 
-      closeModal();
-      switchTab('ticket');
-      toast(`Ticket #${st.last} issued`);
+      try {
+        const st = stations.find(s => s.id === selectedStationId);
+        const ticket = await window.HawassaFirestore.joinQueue({
+          stationId: selectedStationId,
+          driverPhone: phone,
+          licensePlate: plate,
+          driverName: name || 'Driver',
+          vehicleCategory: st ? st.activePermittedCategory : undefined
+        });
+
+        activeTicket = ticket;
+        hasAutoAlerted = false;
+        window.HawassaFirestore.subscribeToTicket(ticket.ticketId, onTicketSnapshot);
+
+        closeModal();
+        switchTab('ticket');
+        toast(`✓ Ticket #${ticket.ticketNumber} booked live!`);
+      } catch (err) {
+        errBox.textContent = err.message || 'Failed to book ticket. Check connection and try again.';
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirm & Take Ticket (ተራ ያዝ)';
+      }
     }
 
-    function leaveQueue() {
-      activeTicket.status = "CANCELLED";
-      switchTab('radar');
-      toast("Left queue");
+    function onTicketSnapshot(ticket) {
+      if (!ticket) {
+        activeTicket = null;
+        window.HawassaFirestore.clearSavedTicketId();
+        renderTicket();
+        return;
+      }
+      const prevStatus = activeTicket ? activeTicket.status : null;
+      activeTicket = ticket;
+      renderTicket();
+      if (ticket.status === 'CALLED' && prevStatus !== 'CALLED') {
+        playDriverAlert();
+      }
+    }
+
+    async function leaveQueue() {
+      if (!activeTicket) return;
+      try {
+        await window.HawassaFirestore.leaveQueue(activeTicket.ticketId);
+        activeTicket = null;
+        switchTab('radar');
+        toast("Left queue & updated station list");
+      } catch (err) {
+        toast("Error leaving queue: " + (err.message || err));
+      }
     }
 
     function renderTicket() {
-      if (!activeTicket) return;
-      const st = stations.find(s => s.id === activeTicket.stationId) || stations[0];
-      document.getElementById('ticketStationName').textContent = isAmharic ? st.nameAm : st.nameEn;
+      const noTicketCard = document.getElementById('noTicketCard');
+      const activeSection = document.getElementById('activeTicketSection');
+      const leaveBtn = document.getElementById('btnLeaveQueue');
+
+      if (!activeTicket) {
+        noTicketCard.classList.remove('hidden');
+        activeSection.classList.add('hidden');
+        leaveBtn.classList.add('hidden');
+        return;
+      }
+
+      noTicketCard.classList.add('hidden');
+      activeSection.classList.remove('hidden');
+      leaveBtn.classList.remove('hidden');
+
+      const st = stations.find(s => s.id === activeTicket.stationId);
+      const stationLabel = st
+        ? (isAmharic ? st.nameAm : st.nameEn)
+        : (isAmharic ? activeTicket.stationNameAm : activeTicket.stationNameEn);
+      document.getElementById('ticketStationName').textContent = stationLabel || activeTicket.stationId;
       document.getElementById('ticketTokenDisplay').textContent = '#' + activeTicket.ticketNumber;
       document.getElementById('ticketPlateDisplay').textContent = activeTicket.licensePlate;
+      document.getElementById('ticketCatDisplay').textContent = activeTicket.vehicleCategory;
 
-      const ahead = Math.max(0, activeTicket.ticketNumber - st.serving);
+      const statusEl = document.getElementById('ticketStatusDisplay');
+      if (activeTicket.status === 'CALLED') {
+        statusEl.textContent = `CALLED • PUMP #${activeTicket.calledPumpNumber || 1}`;
+        statusEl.className = "bg-emerald-500 text-gray-950 px-2.5 py-1 rounded font-black";
+      } else if (activeTicket.status === 'COMPLETED') {
+        statusEl.textContent = "COMPLETED";
+        statusEl.className = "bg-sky-950 text-sky-300 border border-sky-700 px-2.5 py-1 rounded font-bold";
+      } else if (activeTicket.status === 'CANCELLED') {
+        statusEl.textContent = "CANCELLED";
+        statusEl.className = "bg-red-950 text-red-400 border border-red-800 px-2.5 py-1 rounded font-bold";
+      } else {
+        statusEl.textContent = activeTicket.status || "WAITING";
+        statusEl.className = "bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded font-bold";
+      }
+
+      const lane = (st && st.lanes && st.lanes[activeTicket.vehicleCategory])
+        ? st.lanes[activeTicket.vehicleCategory]
+        : { currentlyServing: Math.max(0, activeTicket.ticketNumber - 1), avgDurationSeconds: 120 };
+
+      const ahead = Math.max(0, activeTicket.ticketNumber - (lane.currentlyServing || 0));
       document.getElementById('ticketAheadDisplay').textContent = ahead;
-      const waitMin = Math.max(1, Math.floor((ahead * st.avgSec) / 60));
-      document.getElementById('ticketWaitDisplay').textContent = `~${waitMin} min`;
+      const waitMin = activeTicket.status === 'CALLED' ? 0 : Math.max(1, Math.floor((ahead * (lane.avgDurationSeconds || 120)) / 60));
+      document.getElementById('ticketWaitDisplay').textContent = activeTicket.status === 'CALLED' ? 'NOW!' : `~${waitMin} min`;
 
       const alertBox = document.getElementById('alertBox');
-      if (ahead <= 3 || waitMin <= 10) {
+      if ((activeTicket.status === 'WAITING' || activeTicket.status === 'CALLED') && (ahead <= 3 || waitMin <= 10 || activeTicket.status === 'CALLED')) {
         alertBox.classList.remove('hidden');
+        if (!hasAutoAlerted) {
+          hasAutoAlerted = true;
+          playDriverAlert();
+        }
       } else {
         alertBox.classList.add('hidden');
       }
     }
 
     function playDriverAlert() {
-      // Audio siren tone
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (AudioCtx) {
@@ -356,7 +422,6 @@
 
       if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]);
 
-      // Voice
       setTimeout(() => {
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
@@ -378,32 +443,34 @@
       b._t = setTimeout(() => b.classList.add('hidden'), 3500);
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      if (window.HawassaSharedStore) {
-        window.HawassaSharedStore.subscribe((updatedStations) => {
-          stations = updatedStations.map(st => {
-            const cat = st.activePermittedCategory || "BAJAJ";
-            const lane = (st.lanes && st.lanes[cat]) ? st.lanes[cat] : { currentlyServing: 100, lastAssigned: 100, avgSec: 120 };
-            return {
-              id: st.id,
-              nameEn: st.nameEn,
-              nameAm: st.nameAm,
-              neighborhoodEn: st.neighborhoodEn || st.neighborhood || "",
-              neighborhoodAm: st.neighborhoodAm || "",
-              distance: st.distanceKm || st.distance || 1.2,
-              benzene: st.benzeneStatus,
-              diesel: st.dieselStatus,
-              congestion: st.congestion || st.congestionLevel || "MODERATE",
-              activeCat: cat,
-              serving: lane.currentlyServing || 100,
-              last: lane.lastAssigned || 100,
-              avgSec: lane.avgSec || lane.avgDurationSeconds || 120
-            };
-          });
-          renderRadar();
-          renderTicket();
-        });
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (!window.HawassaFirestore) return;
+
+      window.HawassaFirestore.onStatusChange((connected, msg) => {
+        document.getElementById('cloudSyncSubtitle').textContent = msg;
+        document.getElementById('liveCloudDot').className = connected
+          ? "w-2 h-2 rounded-full bg-emerald-400 animate-ping"
+          : "w-2 h-2 rounded-full bg-amber-400";
+      });
+
+      window.HawassaFirestore.onStationsChange((updated) => {
+        stations = updated || [];
+        renderRadar();
+        renderTicket();
+      });
+
+      window.HawassaFirestore.onBroadcastAlert(() => {
+        playDriverAlert();
+      });
+
+      await window.HawassaFirestore.init();
+
+      // Restore previous booking if driver refreshes the page
+      const savedId = window.HawassaFirestore.getSavedTicketId();
+      if (savedId) {
+        window.HawassaFirestore.subscribeToTicket(savedId, onTicketSnapshot);
       }
+
       renderRadar();
       renderTicket();
     });

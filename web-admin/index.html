@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hawassa Transit & Fuel Queue - Station Coordinator Web Admin</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/shared-store.js"></script>
-  <script src="/cloud-sync.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="/firestore-sync.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
@@ -33,17 +34,16 @@
       </div>
 
       <div class="flex items-center space-x-3">
-        <!-- Live API Server Status Indicator -->
-        <div class="flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/70 border border-emerald-800 px-3 py-1.5 rounded-lg">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" id="apiStatusDot"></span>
-          <span class="font-mono" id="apiStatusText">Live Cloud Stream: Connected</span>
+        <!-- Live Cloud Firestore Status Indicator -->
+        <div id="apiStatusPill" class="flex items-center space-x-2 text-xs text-amber-300 bg-gray-950 border border-gray-800 px-3 py-1.5 rounded-lg">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400" id="apiStatusDot"></span>
+          <span class="font-mono" id="apiStatusText">Connecting to Firestore (foliisho)...</span>
         </div>
 
-        <!-- Configure Cloud API Endpoint Button -->
-        <button onclick="toggleApiModal()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-lg border border-gray-700 text-sky-400 transition flex items-center gap-1.5">
-          <span>⚙️</span>
-          <span>API URL</span>
-        </button>
+        <!-- Quick Nav Links -->
+        <a href="/driver" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-lg border border-gray-700 text-sky-400 transition">
+          📱 Driver View
+        </a>
 
         <!-- Language Switcher -->
         <button onclick="toggleLang()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-lg border border-gray-700 text-amber-400 transition flex items-center gap-1.5">
@@ -54,35 +54,18 @@
     </div>
   </header>
 
-  <!-- Cloud API Settings Modal -->
-  <div id="apiConfigModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <span>⚙️</span> Cloud Backend Connection
-        </h3>
-        <button onclick="toggleApiModal()" class="text-gray-400 hover:text-white">&times;</button>
-      </div>
-      <p class="text-xs text-gray-400 mb-4">
-        Enter the live cloud URL where your backend server is deployed (e.g. Render, Railway, Fly.io, or GCP Cloud Run).
-      </p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Backend Base API URL</label>
-          <input type="text" id="apiBaseInput" class="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-sm text-amber-300 font-mono focus:outline-none focus:border-amber-500" placeholder="https://hawassa-transit-api.onrender.com/api">
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button onclick="toggleApiModal()" class="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-700">Cancel</button>
-          <button onclick="saveApiBase()" class="px-4 py-2 bg-amber-500 text-gray-950 rounded-lg text-xs font-bold hover:bg-amber-400">Save &amp; Connect</button>
-        </div>
-      </div>
+  <!-- Permission Alert Banner (shown only if Firestore rules block reads/writes) -->
+  <div id="firestoreRulesWarning" class="hidden bg-red-950/90 border-b border-red-800 px-6 py-3 text-xs text-red-200">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <span>⚠️ <strong>Cloud Firestore Permission Denied:</strong> Publish the updated <code class="bg-red-900/70 px-1.5 py-0.5 rounded">firestore.rules</code> in your Firebase Console (project <strong>foliisho</strong> → Firestore Database → Rules) so drivers and coordinators can sync live.</span>
+      <button onclick="window.location.reload()" class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded-lg font-bold text-white">Retry Connection</button>
     </div>
   </div>
 
   <!-- Main Administrative Console -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8">
-    
-    <!-- Left 2 Columns: Station Controls & Vehicle Category Authority -->
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 flex-1 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- Left 2 Columns: Station Controls, Vehicle Authority & Live Driver Queue -->
     <div class="lg:col-span-2 space-y-6">
 
       <!-- 1. Station Hub Selector -->
@@ -93,24 +76,36 @@
           </h2>
           <span class="text-xs text-amber-400 font-semibold" id="activeStationBadge">Benzene Madya Central</span>
         </div>
-        
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" id="stationButtons">
-          <button onclick="changeStation('benzene_madya')" id="st-benzene_madya" class="st-card p-4 rounded-xl border border-amber-500 bg-amber-500/10 text-left transition hover:border-amber-400">
-            <div class="font-bold text-sm text-amber-300">Benzene Madya Central</div>
-            <div class="text-xs text-gray-400 mt-0.5">ቤንዚን ማድያ ዋና ጣቢያ</div>
-            <div class="text-[11px] text-gray-400 mt-2">Piazza Corridor • 1.2 km</div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2.5" id="stationButtons">
+          <button onclick="changeStation('benzene_madya')" id="st-benzene_madya" class="st-card p-3.5 rounded-xl border border-amber-500 bg-amber-500/10 text-left transition hover:border-amber-400">
+            <div class="font-bold text-xs text-amber-300">Benzene Madya</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">ቤንዚን ማድያ</div>
+            <div class="text-[10px] text-gray-500 mt-1.5">Piazza • 1.2 km</div>
           </button>
 
-          <button onclick="changeStation('total_menahariya')" id="st-total_menahariya" class="st-card p-4 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300">
-            <div class="font-bold text-sm text-gray-200">TotalEnergies Menahariya</div>
-            <div class="text-xs text-gray-400 mt-0.5">ቶታል መናኸሪያ</div>
-            <div class="text-[11px] text-gray-400 mt-2">Bus Terminal • 2.4 km</div>
+          <button onclick="changeStation('total_menahariya')" id="st-total_menahariya" class="st-card p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300">
+            <div class="font-bold text-xs text-gray-200">TotalEnergies</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">ቶታል መናኸሪያ</div>
+            <div class="text-[10px] text-gray-500 mt-1.5">Terminal • 2.4 km</div>
           </button>
 
-          <button onclick="changeStation('noc_piassa')" id="st-noc_piassa" class="st-card p-4 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300">
-            <div class="font-bold text-sm text-gray-200">NOC Piassa</div>
-            <div class="text-xs text-gray-400 mt-0.5">ኤን ኦ ሲ ፒያሳ</div>
-            <div class="text-[11px] text-gray-400 mt-2">Commercial Center • 0.8 km</div>
+          <button onclick="changeStation('noc_piassa')" id="st-noc_piassa" class="st-card p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300">
+            <div class="font-bold text-xs text-gray-200">NOC Piassa</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">ኤን ኦ ሲ ፒያሳ</div>
+            <div class="text-[10px] text-gray-500 mt-1.5">Center • 0.8 km</div>
+          </button>
+
+          <button onclick="changeStation('ola_datto')" id="st-ola_datto" class="st-card p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300">
+            <div class="font-bold text-xs text-gray-200">Ola Energy Datto</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">ኦላ ዳቶ</div>
+            <div class="text-[10px] text-gray-500 mt-1.5">Datto • 2.8 km</div>
+          </button>
+
+          <button onclick="changeStation('tabor_oil')" id="st-tabor_oil" class="st-card p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300">
+            <div class="font-bold text-xs text-gray-200">National Oil Tabor</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">ናሽናል ታቦር</div>
+            <div class="text-[10px] text-gray-500 mt-1.5">Tabor • 3.3 km</div>
           </button>
         </div>
       </section>
@@ -122,11 +117,11 @@
             <span>📢</span> 2. Admin Vehicle Authority: Permit &amp; Announce Vehicle Category
           </h2>
           <span class="text-[11px] bg-cyan-950 text-cyan-300 border border-cyan-800/80 px-2.5 py-0.5 rounded-full font-medium">
-            Live Streamed to Drivers
+            Synced Live via Firestore
           </span>
         </div>
         <p class="text-xs text-gray-400 mb-5">
-          Drivers register using only phone number and license plate without selecting vehicle types. Coordinators hold full authority to designate and switch which vehicle category is currently permitted to fuel at this station.
+          Drivers book immediately using phone number and license plate. Coordinators designate which vehicle category is currently permitted to fuel at this station.
         </p>
 
         <!-- Category Grid -->
@@ -187,13 +182,11 @@
         </h2>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Advance Queue -->
           <button onclick="callNextDriver()" class="py-4 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center space-x-2 text-base">
             <span class="text-xl">⏩</span>
             <span>Call Next Driver (ቀጣይ ጥራ)</span>
           </button>
 
-          <!-- Broadcast 10-Minute Alert -->
           <button onclick="broadcastAlert()" class="py-4 px-4 bg-sky-700 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center space-x-2 text-base">
             <span class="text-xl">📢</span>
             <span>Broadcast 10-Min Alert (ማስጠንቀቂያ ላክ)</span>
@@ -201,21 +194,45 @@
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          <!-- Pause / Resume Lane -->
-          <button onclick="toggleLane()" id="btnToggleLane" class="py-3 px-4 bg-gray-800 hover:bg-gray-750 text-gray-200 font-semibold rounded-xl border border-gray-700 transition flex items-center justify-center space-x-2 text-sm">
-            <span>⏸️</span>
+          <button onclick="toggleLane()" id="btnToggleLane" class="py-3 px-4 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl border border-gray-700 transition flex items-center justify-center space-x-2 text-sm">
+            <span id="laneToggleIcon">⏸️</span>
             <span id="laneToggleText">Pause Current Lane (መስመር አቁም)</span>
           </button>
 
-          <!-- Permit Category Instant Button -->
           <button onclick="confirmPermitCategory()" class="py-3 px-4 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 font-semibold rounded-xl border border-amber-500/50 transition flex items-center justify-center space-x-2 text-sm">
             <span>✓</span>
-            <span>Permit Category to Driver App</span>
+            <span>Sync Category to Firestore</span>
           </button>
         </div>
 
-        <!-- Action Toast Feedback -->
         <div id="toastMessage" class="hidden p-3.5 rounded-xl bg-gray-800 border border-gray-700 text-xs text-gray-200 transition"></div>
+      </section>
+
+      <!-- 4. LIVE DRIVER QUEUE LIST (Real-Time Bookings from Firestore) -->
+      <section id="liveQueueSection" class="bg-gray-900 border border-emerald-500/30 rounded-2xl p-6 shadow-md space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+              <span>🚘</span> 4. Live Incoming Driver Queue (<span id="liveQueueCountBadge">0</span> Active)
+            </h2>
+            <p class="text-xs text-gray-400 mt-0.5">Real-time bookings submitted from Web Driver &amp; Android APK</p>
+          </div>
+
+          <div class="flex items-center bg-gray-950 p-1 rounded-xl border border-gray-800 text-xs">
+            <button onclick="setQueueFilter('LANE')" id="filterBtnLane" class="px-3 py-1.5 rounded-lg font-bold bg-amber-500 text-gray-950 transition">
+              Current Lane
+            </button>
+            <button onclick="setQueueFilter('ALL')" id="filterBtnAll" class="px-3 py-1.5 rounded-lg font-bold text-gray-400 hover:text-white transition">
+              All Lanes
+            </button>
+          </div>
+        </div>
+
+        <div id="liveQueueContainer" class="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+          <div class="text-center py-8 text-xs text-gray-500 bg-gray-950 rounded-xl border border-gray-800">
+            Waiting for live driver bookings from Cloud Firestore...
+          </div>
+        </div>
       </section>
 
     </div>
@@ -264,7 +281,6 @@
         </h3>
 
         <div class="space-y-4">
-          <!-- Benzene Stock -->
           <div class="p-3.5 bg-gray-950 rounded-xl border border-gray-800 flex items-center justify-between">
             <div>
               <div class="font-bold text-sm text-gray-100">Benzene (ቤንዚን)</div>
@@ -275,7 +291,6 @@
             </button>
           </div>
 
-          <!-- Diesel Stock -->
           <div class="p-3.5 bg-gray-950 rounded-xl border border-gray-800 flex items-center justify-between">
             <div>
               <div class="font-bold text-sm text-gray-100">Diesel (ናፍጣ)</div>
@@ -288,15 +303,14 @@
         </div>
       </section>
 
-      <!-- REST API Endpoint Reference Card -->
+      <!-- Cloud Firestore Reference Card -->
       <section class="bg-gray-900/50 border border-gray-800 rounded-2xl p-5 text-xs text-gray-400 space-y-2">
-        <div class="font-bold text-gray-300 uppercase tracking-wider text-[11px]">Cloud API Integration &amp; Real-Time Events</div>
-        <p class="text-[11px] text-gray-500">Every action taken on this Web Dashboard broadcasts real-time updates directly to drivers' Android devices:</p>
+        <div class="font-bold text-gray-300 uppercase tracking-wider text-[11px]">Shared Cloud Firestore Engine</div>
+        <p class="text-[11px] text-gray-500">All coordinator actions and mobile driver bookings read and write directly to a single shared Cloud Firestore database:</p>
         <div class="p-2.5 bg-gray-950 rounded-lg font-mono text-[10px] space-y-1 text-amber-400/90">
-          <div>GET /api/events (SSE Real-Time Stream)</div>
-          <div>POST /api/admin/station/:id/call-next</div>
-          <div>POST /api/admin/station/:id/permitted-category</div>
-          <div>POST /api/admin/station/:id/broadcast-alert</div>
+          <div>Firebase Project: foliisho</div>
+          <div>Collection: /stations/{stationId}</div>
+          <div>Collection: /tickets/{ticketId}</div>
         </div>
       </section>
 
@@ -304,211 +318,269 @@
   </main>
 
   <footer class="border-t border-gray-900 py-4 text-center text-xs text-gray-500">
-    Hawassa Transit &amp; Fuel Queue Management Platform • Production Web Admin Dashboard
+    Hawassa Transit &amp; Fuel Queue Management Platform • Cloud Firestore Live Coordinator Dashboard
   </footer>
 
   <script>
-    let API_BASE = localStorage.getItem('HAWASSA_API_BASE') || (window.location.origin.includes('localhost') ? 'http://localhost:4000/api' : window.location.origin + '/api');
     let currentStation = 'benzene_madya';
     let currentCategory = 'BAJAJ';
-    let serving = 118;
-    let lastNum = 126;
-    let isLaneActive = true;
-    let benzeneInStock = true;
-    let dieselInStock = true;
+    let queueFilter = 'LANE'; // 'LANE' or 'ALL'
     let isAmharic = false;
+    let stationsList = [];
+    let ticketsList = [];
 
     const categoryNames = {
-      'BAJAJ': { en: 'Bajaj (3-Wheeler)', am: 'ባጃጅ (ባለ 3 እግር)' },
-      'TAXI_MINIBUS': { en: 'Minibus / Taxi', am: 'ሚኒባስ ታክሲ (አባዱላ)' },
-      'PUBLIC_BUS': { en: 'Public Bus', am: 'የህዝብ አውቶቡስ' },
-      'CAR': { en: 'Car / Automobile', am: 'መኪና / አውቶሞቢል' },
-      'MOTORCYCLE': { en: 'Motorcycle', am: 'ሞተር ሳይክል' },
-      'TRUCK_HEAVY': { en: 'Heavy Truck', am: 'ከባድ ጭነት' }
+      'BAJAJ': { en: 'Bajaj (3-Wheeler)', am: 'ባጃጅ (ባለ 3 እግር)', icon: '🛺' },
+      'TAXI_MINIBUS': { en: 'Minibus / Taxi', am: 'ሚኒባስ ታክሲ (አባዱላ)', icon: '🚐' },
+      'PUBLIC_BUS': { en: 'Public Bus', am: 'የህዝብ አውቶቡስ', icon: '🚌' },
+      'CAR': { en: 'Car / Automobile', am: 'መኪና / አውቶሞቢል', icon: '🚗' },
+      'MOTORCYCLE': { en: 'Motorcycle', am: 'ሞተር ሳይክል', icon: '🏍️' },
+      'TRUCK_HEAVY': { en: 'Heavy Truck', am: 'ከባድ ጭነት', icon: '🚛' }
     };
 
-    function toggleApiModal() {
-      const modal = document.getElementById('apiConfigModal');
-      modal.classList.toggle('hidden');
-      if (window.HawassaCloudSync) {
-        document.getElementById('apiBaseInput').value = window.HawassaCloudSync.cloudDbUrl;
-      }
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    function saveApiBase() {
-      const val = document.getElementById('apiBaseInput').value.trim();
-      if (val) {
-        if (window.HawassaCloudSync) {
-          window.HawassaCloudSync.setCloudDbUrl(val);
-        }
-        toggleApiModal();
-        showToast("✓ Cloud Database URL updated to: " + val);
-      }
+    function getActiveStation() {
+      return stationsList.find(s => s.id === currentStation) || stationsList[0] || null;
     }
 
     function changeStation(stId) {
       currentStation = stId;
-      document.querySelectorAll('.st-card').forEach(c => {
-        c.className = 'st-card p-4 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300';
-      });
-      const active = document.getElementById('st-' + stId);
-      if (active) {
-        active.className = 'st-card p-4 rounded-xl border border-amber-500 bg-amber-500/10 text-left transition hover:border-amber-400 text-amber-300';
+      renderAll();
+      const st = getActiveStation();
+      if (st) {
+        showToast(`Selected station: ${st.nameEn}`);
       }
-
-      const stNames = {
-        'benzene_madya': 'Benzene Madya Central',
-        'total_menahariya': 'TotalEnergies Menahariya',
-        'noc_piassa': 'NOC Piassa Central'
-      };
-      document.getElementById('activeStationBadge').textContent = stNames[stId] || stId;
-      showToast(`Selected station: ${stNames[stId]}. Fetching latest queue counters.`);
-      syncWithBackend();
     }
 
-    function setPermittedCategory(cat) {
-      currentCategory = cat;
-      document.querySelectorAll('.cat-pill').forEach(c => {
-        c.className = 'cat-pill p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-gray-300 font-bold text-center transition hover:border-gray-700 flex flex-col items-center';
-      });
-      const activeBtn = document.getElementById('cat-' + cat);
-      if (activeBtn) {
-        activeBtn.className = 'cat-pill p-3.5 rounded-xl border border-amber-500 bg-amber-500 text-gray-950 font-bold text-center transition shadow-md flex flex-col items-center';
-      }
+    function setQueueFilter(mode) {
+      queueFilter = mode;
+      document.getElementById('filterBtnLane').className = mode === 'LANE'
+        ? 'px-3 py-1.5 rounded-lg font-bold bg-amber-500 text-gray-950 transition'
+        : 'px-3 py-1.5 rounded-lg font-bold text-gray-400 hover:text-white transition';
+      document.getElementById('filterBtnAll').className = mode === 'ALL'
+        ? 'px-3 py-1.5 rounded-lg font-bold bg-amber-500 text-gray-950 transition'
+        : 'px-3 py-1.5 rounded-lg font-bold text-gray-400 hover:text-white transition';
+      renderLiveQueue();
+    }
 
-      document.getElementById('currentLanePill').textContent = `${cat} LANE`;
-      const catObj = categoryNames[cat];
-      document.getElementById('announcedCategoryTitle').textContent = `${catObj.am} (${catObj.en})`;
-      
-      confirmPermitCategory();
+    async function setPermittedCategory(cat) {
+      currentCategory = cat;
+      renderAll();
+      await confirmPermitCategory();
     }
 
     async function confirmPermitCategory() {
-      showToast(`Broadcasting permitted category [${currentCategory}] to all drivers at ${currentStation}...`);
-      if (window.HawassaSharedStore) {
-        window.HawassaSharedStore.setPermittedCategory(currentStation, currentCategory);
+      try {
+        await window.HawassaFirestore.setPermittedCategory(currentStation, currentCategory);
+        showToast(`✓ Category [${currentCategory}] saved to Cloud Firestore & synced to all drivers!`);
+      } catch (e) {
+        showToast(`❌ Failed to update category: ${e.message || e}`);
       }
-      if (window.HawassaCloudSync) {
-        await window.HawassaCloudSync.announcePermittedCategory(currentStation, currentCategory);
-      }
-      showToast(`✓ Category ${currentCategory} saved to shared store & live cloud!`);
     }
 
     async function callNextDriver() {
-      if (window.HawassaSharedStore) {
-        serving = window.HawassaSharedStore.advanceQueue(currentStation, currentCategory);
-      } else {
-        serving++;
+      try {
+        const nextNum = await window.HawassaFirestore.callNextDriver(currentStation, currentCategory);
+        showToast(`⏩ Called #${nextNum} for ${currentCategory} lane across all devices!`);
+      } catch (e) {
+        showToast(`❌ Failed to call next driver: ${e.message || e}`);
       }
-      updateCounters();
-      showToast(`⏩ Called Driver #${serving} for ${currentCategory} lane! Saved to shared store.`);
-      if (window.HawassaCloudSync) {
-        await window.HawassaCloudSync.callNextDriver(currentStation, currentCategory, serving);
+    }
+
+    async function callSpecificTicket(ticketId) {
+      const ticket = ticketsList.find(t => t.ticketId === ticketId);
+      if (!ticket) return;
+      try {
+        await window.HawassaFirestore.callSpecificTicket(ticket);
+        showToast(`📢 Called ticket #${ticket.ticketNumber} (${ticket.licensePlate}) to fuel pump!`);
+      } catch (e) {
+        showToast(`❌ Error calling ticket: ${e.message || e}`);
       }
-      showToast(`✓ Driver #${serving} called live across all connected Android apps!`);
+    }
+
+    async function markTicketServed(ticketId) {
+      try {
+        await window.HawassaFirestore.markTicketServed(ticketId);
+        showToast(`✓ Ticket marked as served & completed.`);
+      } catch (e) {
+        showToast(`❌ Error marking served: ${e.message || e}`);
+      }
+    }
+
+    async function cancelTicket(ticketId) {
+      try {
+        await window.HawassaFirestore.cancelTicket(ticketId);
+        showToast(`Ticket cancelled and removed from active queue.`);
+      } catch (e) {
+        showToast(`❌ Error cancelling ticket: ${e.message || e}`);
+      }
     }
 
     async function broadcastAlert() {
-      showToast(`📢 Dispatching high-priority 10-Minute Audible Alert to all drivers awaiting ${currentCategory} turn!`);
-      if (window.HawassaCloudSync) {
-        await window.HawassaCloudSync.broadcastTenMinAlert(currentStation, currentCategory);
+      try {
+        await window.HawassaFirestore.broadcastTenMinAlert(currentStation, currentCategory);
+        showToast(`📢 10-Minute Alert broadcasted to drivers awaiting ${currentCategory} at ${currentStation}!`);
+      } catch (e) {
+        showToast(`❌ Failed to broadcast alert: ${e.message || e}`);
       }
     }
 
-    function toggleLane() {
-      isLaneActive = !isLaneActive;
-      const text = document.getElementById('laneToggleText');
-      if (isLaneActive) {
-        text.textContent = isAmharic ? 'መስመር አቁም (Pause Lane)' : 'Pause Current Lane (መስመር አቁም)';
-        showToast(`Lane for ${currentCategory} resumed.`);
-      } else {
-        text.textContent = isAmharic ? 'መስመር አስጀምር (Resume Lane)' : 'Resume Current Lane (መስመር አስጀምር)';
-        showToast(`Lane for ${currentCategory} paused.`);
+    async function toggleLane() {
+      const st = getActiveStation();
+      if (!st || !st.lanes) return;
+      const lane = st.lanes[currentCategory] || { isActive: true };
+      const newActive = (lane.isActive === false);
+      try {
+        await window.HawassaFirestore.toggleLaneActive(currentStation, currentCategory, newActive);
+        showToast(newActive ? `Resumed ${currentCategory} lane.` : `Paused ${currentCategory} lane.`);
+      } catch (e) {
+        showToast(`❌ Failed to toggle lane: ${e.message || e}`);
       }
     }
 
     async function toggleFuel(type) {
-      if (type === 'benzene') {
-        benzeneInStock = !benzeneInStock;
-        const el = document.getElementById('benzeneStatusText');
-        el.textContent = benzeneInStock ? 'In Stock (በቂ ክምችት)' : 'Out of Stock (አልቋል)';
-        el.className = benzeneInStock ? 'text-xs text-emerald-400 mt-0.5' : 'text-xs text-red-400 mt-0.5';
-        showToast(`Benzene stock status updated to: ${benzeneInStock ? 'AVAILABLE' : 'OUT_OF_STOCK'}`);
-        if (window.HawassaSharedStore) {
-          window.HawassaSharedStore.updateFuelStatus(currentStation, true, benzeneInStock ? 'AVAILABLE' : 'OUT_OF_STOCK');
-        }
-        if (window.HawassaCloudSync) {
-          await window.HawassaCloudSync.updateFuelStock(currentStation, true, benzeneInStock ? 'AVAILABLE' : 'OUT_OF_STOCK');
-        }
-      } else {
-        dieselInStock = !dieselInStock;
-        const el = document.getElementById('dieselStatusText');
-        el.textContent = dieselInStock ? 'In Stock (በቂ ክምችት)' : 'Low Stock (ዝቅተኛ)';
-        el.className = dieselInStock ? 'text-xs text-emerald-400 mt-0.5' : 'text-xs text-amber-400 mt-0.5';
-        showToast(`Diesel stock status updated to: ${dieselInStock ? 'AVAILABLE' : 'LOW_STOCK'}`);
-        if (window.HawassaSharedStore) {
-          window.HawassaSharedStore.updateFuelStatus(currentStation, false, dieselInStock ? 'AVAILABLE' : 'LOW_STOCK');
-        }
-        if (window.HawassaCloudSync) {
-          await window.HawassaCloudSync.updateFuelStock(currentStation, false, dieselInStock ? 'AVAILABLE' : 'LOW_STOCK');
-        }
-      }
-    }
-
-    function updateCounters() {
-      document.getElementById('dispServing').textContent = '#' + serving;
-      document.getElementById('dispLast').textContent = '#' + lastNum;
-      const waiting = Math.max(0, lastNum - serving);
-      document.getElementById('dispWaiting').textContent = waiting;
-    }
-
-    async function syncWithBackend() {
+      const st = getActiveStation();
+      if (!st) return;
+      const isBenzene = (type === 'benzene');
+      const newStatus = isBenzene
+        ? (st.benzeneStatus === 'AVAILABLE' ? 'OUT_OF_STOCK' : 'AVAILABLE')
+        : (st.dieselStatus === 'AVAILABLE' ? 'LOW_STOCK' : 'AVAILABLE');
       try {
-        const res = await fetch(`${API_BASE}/stations`);
-        const json = await res.json();
-        if (json.success) {
-          const st = json.data.find(s => s.id === currentStation);
-          if (st && st.lanes[currentCategory]) {
-            serving = st.lanes[currentCategory].currentlyServing;
-            lastNum = st.lanes[currentCategory].lastAssigned;
-            updateCounters();
-          }
-        }
+        await window.HawassaFirestore.updateFuelStock(currentStation, isBenzene, newStatus);
+        showToast(`${isBenzene ? 'Benzene' : 'Diesel'} status updated to ${newStatus}`);
       } catch (e) {
-        // Offline / simulated
+        showToast(`❌ Failed to update fuel stock: ${e.message || e}`);
       }
     }
 
-    function initEventStream() {
-      if (window.HawassaCloudSync) {
-        window.HawassaCloudSync.initRealtimeStream((connected, statusMsg) => {
-          document.getElementById('apiStatusText').textContent = statusMsg;
-          document.getElementById('apiStatusDot').className = connected
-            ? "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"
-            : "w-2.5 h-2.5 rounded-full bg-amber-400";
-        });
+    function renderAll() {
+      const st = getActiveStation();
 
-        window.HawassaCloudSync.onEvent((data) => {
-          if (!data) return;
-          if (data.type === "QUEUE_ADVANCED" && data.stationId === currentStation && data.category === currentCategory) {
-            serving = data.currentlyServing;
-            updateCounters();
-          } else if (data.type === "PERMITTED_CATEGORY_CHANGED" && data.stationId === currentStation) {
-            currentCategory = data.activePermittedCategory;
-            updateCounters();
-          } else if (data.type === "FUEL_STATUS_UPDATED" && data.stationId === currentStation) {
-            if (data.isBenzene) {
-              benzeneInStock = (data.status === 'AVAILABLE');
-              document.getElementById('benzeneStatusText').textContent = benzeneInStock ? 'In Stock (በቂ ክምችት)' : 'Out of Stock (አልቋል)';
-              document.getElementById('benzeneStatusText').className = benzeneInStock ? 'text-xs text-emerald-400 mt-0.5' : 'text-xs text-red-400 mt-0.5';
-            } else {
-              dieselInStock = (data.status === 'AVAILABLE');
-              document.getElementById('dieselStatusText').textContent = dieselInStock ? 'In Stock (በቂ ክምችት)' : 'Low Stock (ዝቅተኛ)';
-              document.getElementById('dieselStatusText').className = dieselInStock ? 'text-xs text-emerald-400 mt-0.5' : 'text-xs text-amber-400 mt-0.5';
-            }
-          }
-        });
+      document.querySelectorAll('.st-card').forEach(c => {
+        c.className = 'st-card p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-left transition hover:border-gray-700 text-gray-300';
+      });
+      const activeStBtn = document.getElementById('st-' + currentStation);
+      if (activeStBtn) {
+        activeStBtn.className = 'st-card p-3.5 rounded-xl border border-amber-500 bg-amber-500/10 text-left transition hover:border-amber-400 text-amber-300';
       }
+
+      if (st) {
+        currentCategory = st.activePermittedCategory || currentCategory;
+        document.getElementById('activeStationBadge').textContent = isAmharic ? st.nameAm : st.nameEn;
+
+        document.querySelectorAll('.cat-pill').forEach(c => {
+          c.className = 'cat-pill p-3.5 rounded-xl border border-gray-800 bg-gray-950 text-gray-300 font-bold text-center transition hover:border-gray-700 flex flex-col items-center';
+        });
+        const activeCatBtn = document.getElementById('cat-' + currentCategory);
+        if (activeCatBtn) {
+          activeCatBtn.className = 'cat-pill p-3.5 rounded-xl border border-amber-500 bg-amber-500 text-gray-950 font-bold text-center transition shadow-md flex flex-col items-center';
+        }
+
+        document.getElementById('currentLanePill').textContent = `${currentCategory} LANE`;
+        const catObj = categoryNames[currentCategory] || { en: currentCategory, am: currentCategory };
+        document.getElementById('announcedCategoryTitle').textContent = `${catObj.am} (${catObj.en})`;
+
+        const lane = (st.lanes && st.lanes[currentCategory]) ? st.lanes[currentCategory] : { currentlyServing: 0, lastAssigned: 0, isActive: true };
+        const serving = lane.currentlyServing || 0;
+        const lastNum = lane.lastAssigned || 0;
+        const waiting = Math.max(0, lastNum - serving);
+
+        document.getElementById('dispServing').textContent = '#' + serving;
+        document.getElementById('dispLast').textContent = '#' + lastNum;
+        document.getElementById('dispWaiting').textContent = waiting;
+
+        const isLaneActive = lane.isActive !== false;
+        document.getElementById('laneToggleIcon').textContent = isLaneActive ? '⏸️' : '▶️';
+        document.getElementById('laneToggleText').textContent = isLaneActive
+          ? (isAmharic ? 'መስመር አቁም (Pause Lane)' : 'Pause Current Lane (መስመር አቁም)')
+          : (isAmharic ? 'መስመር አስጀምር (Resume Lane)' : 'Resume Current Lane (መስመር አስጀምር)');
+
+        const benzAvail = st.benzeneStatus === 'AVAILABLE';
+        const benzEl = document.getElementById('benzeneStatusText');
+        benzEl.textContent = benzAvail ? 'In Stock (በቂ ክምችት)' : 'Out of Stock (አልቋል)';
+        benzEl.className = benzAvail ? 'text-xs text-emerald-400 mt-0.5' : 'text-xs text-red-400 mt-0.5';
+
+        const diesAvail = st.dieselStatus === 'AVAILABLE';
+        const diesEl = document.getElementById('dieselStatusText');
+        diesEl.textContent = diesAvail ? 'In Stock (በቂ ክምችት)' : 'Low Stock (ዝቅተኛ)';
+        diesEl.className = diesAvail ? 'text-xs text-emerald-400 mt-0.5' : 'text-xs text-amber-400 mt-0.5';
+      }
+
+      renderLiveQueue();
+    }
+
+    function renderLiveQueue() {
+      const container = document.getElementById('liveQueueContainer');
+      const stationTickets = ticketsList.filter(t => t.stationId === currentStation);
+      const filtered = queueFilter === 'ALL'
+        ? stationTickets
+        : stationTickets.filter(t => t.vehicleCategory === currentCategory);
+
+      document.getElementById('liveQueueCountBadge').textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-xs text-gray-500 bg-gray-950 rounded-xl border border-gray-800">
+            No active driver tickets queued for <strong>${escapeHtml(queueFilter === 'ALL' ? 'this station' : currentCategory)}</strong> yet.
+            Bookings from the Driver Web App or Android APK appear here automatically.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const catInfo = categoryNames[t.vehicleCategory] || { icon: '🚗', en: t.vehicleCategory };
+        const isCalled = t.status === 'CALLED' || t.status === 'SERVING';
+        const statusBadge = isCalled
+          ? `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-700 font-bold text-[10px]">CALLED${t.calledPumpNumber ? ' • Pump #' + escapeHtml(t.calledPumpNumber) : ''}</span>`
+          : `<span class="px-2 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-800/70 font-bold text-[10px]">WAITING</span>`;
+
+        const safeId = escapeHtml(t.ticketId);
+        const safePlate = escapeHtml(t.licensePlate);
+        const safePhone = escapeHtml(t.phoneNumber);
+        const safeName = escapeHtml(t.driverName || 'Driver');
+
+        return `
+          <div class="p-3.5 rounded-xl bg-gray-950 border ${isCalled ? 'border-emerald-600/60' : 'border-gray-800'} flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-12 h-12 rounded-xl ${isCalled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'} flex items-center justify-center font-mono font-black text-base shrink-0">
+                #${escapeHtml(t.ticketNumber)}
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-mono font-extrabold text-sm text-white">${safePlate}</span>
+                  ${statusBadge}
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-300">${catInfo.icon} ${escapeHtml(t.vehicleCategory)}</span>
+                </div>
+                <div class="text-xs text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
+                  <span>👤 ${safeName}</span>
+                  <a href="tel:${safePhone}" class="text-sky-400 hover:underline font-mono">📞 ${safePhone}</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button onclick="callSpecificTicket('${safeId}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition">
+                📢 Call
+              </button>
+              <button onclick="markTicketServed('${safeId}')" class="px-3 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold transition">
+                ✓ Served
+              </button>
+              <button onclick="cancelTicket('${safeId}')" class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-red-700 text-gray-300 hover:text-white text-xs font-bold transition" title="Cancel Ticket">
+                ✕
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function showToast(msg) {
@@ -522,14 +594,45 @@
     function toggleLang() {
       isAmharic = !isAmharic;
       document.getElementById('langBtnText').textContent = isAmharic ? 'English' : 'አማርኛ';
+      renderAll();
       showToast(isAmharic ? 'ቋንቋው ወደ አማርኛ ተቀይሯል' : 'Language switched to English');
     }
 
-    // Auto-initialize real-time events on page load
     window.addEventListener('DOMContentLoaded', () => {
-      initEventStream();
-      syncWithBackend();
-      setInterval(syncWithBackend, 4000); // Poll as a reliable fallback every 4s
+      if (!window.HawassaFirestore) return;
+
+      window.HawassaFirestore.onStatusChange((connected, msg) => {
+        const textEl = document.getElementById('apiStatusText');
+        const dotEl = document.getElementById('apiStatusDot');
+        const pillEl = document.getElementById('apiStatusPill');
+        const warnEl = document.getElementById('firestoreRulesWarning');
+
+        textEl.textContent = msg;
+        if (connected) {
+          dotEl.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping";
+          pillEl.className = "flex items-center space-x-2 text-xs text-emerald-400 bg-emerald-950/70 border border-emerald-800 px-3 py-1.5 rounded-lg";
+          warnEl.classList.add('hidden');
+        } else if (msg.toLowerCase().includes('permission denied')) {
+          dotEl.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+          pillEl.className = "flex items-center space-x-2 text-xs text-red-300 bg-red-950/80 border border-red-800 px-3 py-1.5 rounded-lg";
+          warnEl.classList.remove('hidden');
+        } else {
+          dotEl.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
+          pillEl.className = "flex items-center space-x-2 text-xs text-amber-300 bg-gray-950 border border-gray-800 px-3 py-1.5 rounded-lg";
+        }
+      });
+
+      window.HawassaFirestore.onStationsChange((stations) => {
+        stationsList = stations || [];
+        renderAll();
+      });
+
+      window.HawassaFirestore.onTicketsChange((tickets) => {
+        ticketsList = tickets || [];
+        renderLiveQueue();
+      });
+
+      window.HawassaFirestore.init();
     });
   </script>
 </body>

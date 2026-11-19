@@ -1,6 +1,0 @@
-{
-  "summary": "Implementation plan to fix real-time synchronization between the Vercel-deployed Web Admin Dashboard (https://foliisho.vercel.app/) and standalone Android mobile apps. Integrates an instant public Firebase Realtime Database cloud sync endpoint with live SSE/WebSocket streaming and resilient fallback polling.",
-  "updatedAt": "2026-11-03T15:55:56.682225700Z",
-  "requestFeedback": true,
-  "userFacing": true
-}

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +58,8 @@ import com.example.ui.theme.TextSecondary
 fun JoinQueueDialog(
     station: StationInfo,
     language: Language,
+    isSubmitting: Boolean = false,
+    remoteError: String? = null,
     onDismiss: () -> Unit,
     onConfirm: (stationId: String, driverName: String, phone: String, plate: String) -> Unit
 ) {
@@ -259,10 +262,11 @@ fun JoinQueueDialog(
                         .testTag("input_driver_name")
                 )
 
-                if (errorMessage != null) {
+                val displayError = errorMessage ?: remoteError
+                if (displayError != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = errorMessage ?: "",
+                        text = displayError,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                         fontSize = 12.sp
@@ -274,7 +278,7 @@ fun JoinQueueDialog(
                 // Confirm Button
                 Button(
                     onClick = {
-                        if (licensePlate.trim().length < 5) {
+                        if (licensePlate.trim().length < 4) {
                             errorMessage = if (language == Language.AMHARIC)
                                 "እባክዎ ትክክለኛ የሰሌዳ ቁጥር ያስገቡ"
                             else
@@ -295,6 +299,7 @@ fun JoinQueueDialog(
                             licensePlate
                         )
                     },
+                    enabled = !isSubmitting,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SolarAmber,
                         contentColor = TextOnAmber
@@ -305,10 +310,23 @@ fun JoinQueueDialog(
                         .height(48.dp)
                         .testTag("confirm_join_queue_btn")
                 ) {
-                    Text(
-                        text = if (language == Language.AMHARIC) "ተራ ያረጋግጡ" else "Confirm Queue Token",
-                        style = MaterialTheme.typography.labelLarge
-                    )
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = TextOnAmber,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (language == Language.AMHARIC) "በመመዝገብ ላይ..." else "Booking Live...",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    } else {
+                        Text(
+                            text = if (language == Language.AMHARIC) "ተራ ያረጋግጡ" else "Confirm Queue Token",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                 }
             }
         }

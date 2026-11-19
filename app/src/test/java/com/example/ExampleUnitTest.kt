@@ -124,4 +124,33 @@ class ExampleUnitTest {
         // Must automatically bind to TAXI_MINIBUS
         assertEquals(VehicleCategory.TAXI_MINIBUS, ticket.vehicleCategory)
     }
+
+    @Test
+    fun testCloudTicketAndStationSyncUpdatesTicketStatus() {
+        val joinResult = repository.joinQueue(
+            stationId = "benzene_madya",
+            vehicleCategory = VehicleCategory.BAJAJ,
+            driverName = "Dawit",
+            driverPhone = "0911998877",
+            licensePlate = "AA-2-55443"
+        )
+        val ticket = joinResult.getOrThrow()
+        repository.setActiveTicketFromCloud(ticket)
+        assertEquals(com.example.model.TicketStatus.WAITING, repository.currentTicket.value?.status)
+
+        // Simulate station snapshot advancing currentlyServing to match ticketNumber
+        val updatedStations = repository.stations.value.map { st ->
+            if (st.id == "benzene_madya") {
+                val updatedLanes = st.lanes.toMutableMap()
+                val currentLane = st.getLane(VehicleCategory.BAJAJ)
+                updatedLanes[VehicleCategory.BAJAJ] = currentLane.copy(currentlyServingNumber = ticket.ticketNumber)
+                st.copy(lanes = updatedLanes)
+            } else {
+                st
+            }
+        }
+        repository.updateStationsFromCloud(updatedStations)
+
+        assertEquals(com.example.model.TicketStatus.CALLED, repository.currentTicket.value?.status)
+    }
 }

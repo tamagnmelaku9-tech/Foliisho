@@ -3,16 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hawassa Transit & Fuel Queue - Live Interactive Testing System</title>
+  <title>Hawassa Transit &amp; Fuel Queue - Live Interactive Testing System</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/shared-store.js"></script>
-  <script src="/cloud-sync.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="/firestore-sync.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
     .amber-gradient { background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); }
-    .amber-glow { box-shadow: 0 0 25px rgba(255, 179, 0, 0.35); }
-    .emerald-glow { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
     .phone-frame {
       width: 380px;
       height: 760px;
@@ -31,7 +30,6 @@
         box-shadow: none;
       }
     }
-    /* Pulse animation for 10-minute warning */
     @keyframes alertPulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.03); opacity: 0.9; }
@@ -46,7 +44,7 @@
   <!-- TOP UNIFIED NAVIGATION & VIEWPORT CONTROLLER -->
   <header class="border-b border-gray-800 bg-gray-900/95 backdrop-blur sticky top-0 z-50 px-4 py-3 shadow-xl">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-      
+
       <!-- App Brand -->
       <div class="flex items-center space-x-3">
         <div class="w-10 h-10 rounded-xl amber-gradient flex items-center justify-center text-gray-950 font-black text-xl shadow-lg">
@@ -56,7 +54,7 @@
           <div class="flex items-center gap-2">
             <h1 class="text-base font-extrabold text-white tracking-tight">Hawassa Transit Queue</h1>
             <span class="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-              Live Preview & Dual Test
+              Live Cloud Firestore Sync
             </span>
           </div>
           <p class="text-xs text-gray-400">የሀዋሳ ነዳጅ እና ትራንስፖርት ተራ - ቤንዚን ማድያ እና አጠቃላይ ጣቢያዎች</p>
@@ -81,16 +79,16 @@
 
       <!-- Action Utilities -->
       <div class="flex items-center space-x-2">
-        <!-- Live SSE Status Indicator -->
-        <div class="hidden sm:flex items-center space-x-1.5 text-xs text-emerald-400 bg-emerald-950/70 border border-emerald-800 px-2.5 py-1.5 rounded-lg">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span class="font-mono text-[11px]" id="topSyncStatus">Live Cloud Sync: Active</span>
+        <!-- Live Firestore Status Indicator -->
+        <div id="topSyncPill" class="hidden sm:flex items-center space-x-1.5 text-xs text-amber-300 bg-gray-950 border border-gray-800 px-2.5 py-1.5 rounded-lg">
+          <span id="topSyncDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span class="font-mono text-[11px]" id="topSyncStatus">Connecting to Firestore...</span>
         </div>
 
         <!-- Global Language Switcher -->
         <button onclick="toggleGlobalLang()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-lg border border-gray-700 text-amber-400 transition flex items-center gap-1">
           <span>🌐</span>
-          <span id="globalLangLabel">አማርኛ</span>
+          <span id="globalLangLabel">English</span>
         </button>
 
         <!-- Download APK Button -->
@@ -107,6 +105,14 @@
     </div>
   </header>
 
+  <!-- Permission Alert Banner (shown if Firestore rules not published yet) -->
+  <div id="firestoreRulesWarning" class="hidden bg-red-950/90 border-b border-red-800 px-4 py-2.5 text-xs text-red-200">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <span>⚠️ <strong>Cloud Firestore Permission Denied:</strong> Publish the updated <code class="bg-red-900/70 px-1.5 py-0.5 rounded">firestore.rules</code> in Firebase Console (project <strong>foliisho</strong> → Firestore Database → Rules) so Driver &amp; Coordinator sync live.</span>
+      <button onclick="window.location.reload()" class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded-lg font-bold text-white">Retry</button>
+    </div>
+  </div>
+
   <!-- NOTIFICATION TOAST BANNER -->
   <div id="unifiedToast" class="fixed top-20 right-5 z-50 hidden max-w-sm bg-gray-900 border border-amber-500 text-white text-xs px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2">
     <span class="text-amber-400 text-base">📢</span>
@@ -115,10 +121,10 @@
 
   <!-- MAIN PREVIEW CONTAINER -->
   <main class="flex-1 max-w-7xl mx-auto w-full p-4 md:p-6 flex flex-col justify-center">
-    
+
     <!-- DUAL TESTING VIEW (SIDE-BY-SIDE) -->
     <div id="viewDualContainer" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      
+
       <!-- LEFT COLUMN: WEB ADMIN COORDINATOR DASHBOARD (7 COLS) -->
       <section class="lg:col-span-7 bg-gray-900 border border-gray-800 rounded-3xl p-5 shadow-2xl space-y-5">
         <div class="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -131,9 +137,9 @@
               <p class="text-[11px] text-gray-400">የጣቢያ አስተዳዳሪ መቆጣጠሪያ - ተሽከርካሪ ማወጅ እና ተራ መጥራት</p>
             </div>
           </div>
-          <span class="text-[11px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-2 py-0.5 rounded">
-            Coordinator Role
-          </span>
+          <a href="/admin" class="text-[11px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-2.5 py-1 rounded hover:bg-emerald-900 transition">
+            Open Full /admin ↗
+          </a>
         </div>
 
         <!-- Station Selector Dropdown -->
@@ -155,7 +161,7 @@
               <span>🚨</span>
               <span>Announce Permitted Vehicle Category (የተፈቀደ ተሽከርካሪ ማወጅ)</span>
             </label>
-            <span class="text-[10px] text-gray-400">Drivers follow this announcement</span>
+            <span class="text-[10px] text-gray-400">Synced via Firestore</span>
           </div>
 
           <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5" id="adminCategoryButtons">
@@ -170,17 +176,17 @@
         <div class="grid grid-cols-3 gap-3">
           <div class="bg-gray-950 border border-gray-800 rounded-xl p-3 text-center">
             <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Currently Serving</span>
-            <span id="adminDispServing" class="text-2xl font-black text-emerald-400 font-mono mt-0.5 block">#118</span>
-            <span class="text-[9px] text-gray-500">በአሁኑ ሰዓት የሚስተናገድ</span>
+            <span id="adminDispServing" class="text-2xl font-black text-emerald-400 font-mono mt-0.5 block">#--</span>
+            <span class="text-[9px] text-gray-500">በአሁኑ ሰዓት የሚስተናገደው</span>
           </div>
           <div class="bg-gray-950 border border-gray-800 rounded-xl p-3 text-center">
-            <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Last Ticket</span>
-            <span id="adminDispLast" class="text-2xl font-black text-amber-400 font-mono mt-0.5 block">#126</span>
+            <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Last Token</span>
+            <span id="adminDispLast" class="text-2xl font-black text-amber-400 font-mono mt-0.5 block">#--</span>
             <span class="text-[9px] text-gray-500">የመጨረሻ የተሰጠ ቁጥር</span>
           </div>
           <div class="bg-gray-950 border border-gray-800 rounded-xl p-3 text-center">
             <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Waiting Drivers</span>
-            <span id="adminDispWaiting" class="text-2xl font-black text-sky-400 font-mono mt-0.5 block">8</span>
+            <span id="adminDispWaiting" class="text-2xl font-black text-sky-400 font-mono mt-0.5 block">0</span>
             <span class="text-[9px] text-gray-500">በተራ የሚጠብቁ</span>
           </div>
         </div>
@@ -191,14 +197,34 @@
             <span class="text-lg">📢</span>
             <span id="btnCallNextText">Call Next Driver (ቀጣይ ጥራ)</span>
           </button>
-          
+
           <button onclick="adminBroadcastTenMinAlert()" class="py-3 px-4 bg-amber-600 hover:bg-amber-500 active:scale-95 text-gray-950 font-extrabold rounded-xl shadow-lg transition flex items-center justify-center gap-2">
             <span class="text-lg">⚡</span>
             <span id="btnBroadcastAlertText">Broadcast 10-Min Warning</span>
           </button>
         </div>
 
-        <!-- Fuel Stock Control & Lane Status -->
+        <!-- LIVE INCOMING DRIVER QUEUE LIST -->
+        <div class="bg-gray-950 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-xs font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🚘</span>
+              <span>Live Driver Queue (<span id="adminLiveQueueCount">0</span> Active)</span>
+            </h3>
+            <div class="flex items-center bg-gray-900 p-0.5 rounded-lg border border-gray-800 text-[10px]">
+              <button onclick="setAdminQueueFilter('LANE')" id="dualFilterLane" class="px-2.5 py-1 rounded font-bold bg-amber-500 text-gray-950">Current Lane</button>
+              <button onclick="setAdminQueueFilter('ALL')" id="dualFilterAll" class="px-2.5 py-1 rounded font-bold text-gray-400 hover:text-white">All Lanes</button>
+            </div>
+          </div>
+
+          <div id="adminLiveQueueList" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+            <div class="text-center py-4 text-[11px] text-gray-500">
+              No active driver tickets queued yet.
+            </div>
+          </div>
+        </div>
+
+        <!-- Fuel Stock Control & Audit -->
         <div class="border-t border-gray-800 pt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div class="flex items-center space-x-3">
             <button onclick="adminToggleFuel('benzene')" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-lg border border-gray-700 flex items-center gap-1.5">
@@ -210,16 +236,16 @@
               <span id="adminDieselStatusBadge" class="text-emerald-400 font-bold">AVAILABLE</span>
             </button>
           </div>
-          <span class="text-[11px] text-gray-400 font-mono" id="adminAuditText">Last Action: System Online</span>
+          <span class="text-[11px] text-gray-400 font-mono" id="adminAuditText">Firestore: foliisho</span>
         </div>
       </section>
 
       <!-- RIGHT COLUMN: INTERACTIVE DRIVER MOBILE INTERFACE (5 COLS) -->
       <section class="lg:col-span-5 flex flex-col items-center">
-        
+
         <!-- Smartphone Container Frame -->
         <div class="phone-frame bg-gray-900 flex flex-col relative text-gray-100 select-none">
-          
+
           <!-- Simulated Android Status Bar -->
           <div class="bg-gray-950 px-5 pt-2 pb-1.5 flex items-center justify-between text-[11px] text-gray-400 border-b border-gray-800/80">
             <span id="phoneClock" class="font-bold text-white">12:45</span>
@@ -237,7 +263,7 @@
               <span class="text-lg">🚖</span>
               <div>
                 <h3 class="text-xs font-extrabold text-white">Hawassa Driver Radar</h3>
-                <p class="text-[10px] text-gray-400" id="driverStationSubtitle">Benzene Madya Area</p>
+                <p class="text-[10px] text-gray-400" id="driverStationSubtitle">Live Cloud Sync (foliisho)</p>
               </div>
             </div>
             <div class="flex items-center space-x-1.5">
@@ -252,7 +278,7 @@
 
           <!-- PHONE SCREEN 1: MULTI-STATION RADAR VIEW -->
           <div id="mobileScreenRadar" class="flex-1 overflow-y-auto p-3 space-y-2.5">
-            
+
             <!-- Permitted Category Announcement Banner -->
             <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-start space-x-2">
               <span class="text-amber-400 text-base">📢</span>
@@ -270,9 +296,17 @@
 
           <!-- PHONE SCREEN 2: ACTIVE QUEUE TICKET VIEW -->
           <div id="mobileScreenTicket" class="hidden flex-1 overflow-y-auto p-4 flex flex-col justify-between">
-            <div class="space-y-4">
-              
-              <!-- 10-Minute High Priority Warning Banner (Triggered when headway <= 10 min) -->
+            <div id="mobileNoTicketBox" class="hidden flex-1 flex flex-col items-center justify-center text-center p-4 space-y-3">
+              <div class="text-3xl">🎫</div>
+              <p class="text-xs font-bold text-white">No Active Ticket Yet</p>
+              <p class="text-[11px] text-gray-400">Tap Join Queue on any station to book a real Firestore queue slot.</p>
+              <button onclick="switchMobileTab('radar')" class="px-3.5 py-2 bg-amber-500 text-gray-950 font-bold text-xs rounded-xl">
+                View Stations
+              </button>
+            </div>
+
+            <div id="mobileActiveTicketBox" class="space-y-4">
+              <!-- 10-Minute High Priority Warning Banner -->
               <div id="mobileTenMinAlertBanner" class="hidden bg-red-600/20 border-2 border-red-500 rounded-2xl p-3 animate-alert-pulse">
                 <div class="flex items-center space-x-2">
                   <span class="text-xl">🚨</span>
@@ -287,9 +321,9 @@
               <div class="bg-gray-950 border border-gray-800 rounded-2xl p-5 text-center shadow-xl relative overflow-hidden">
                 <div class="absolute -right-8 -top-8 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none"></div>
                 <span class="text-[10px] font-bold text-amber-400 uppercase tracking-widest block" id="ticketStationName">Benzene Madya Central</span>
-                <span class="text-4xl font-black text-white font-mono my-2 block" id="ticketTokenNumber">#126</span>
-                
-                <div class="flex items-center justify-center space-x-2 text-xs">
+                <span class="text-4xl font-black text-white font-mono my-2 block" id="ticketTokenNumber">#--</span>
+
+                <div class="flex flex-wrap items-center justify-center gap-1.5 text-xs">
                   <span class="bg-gray-800 text-gray-300 px-2 py-0.5 rounded font-mono" id="ticketPlateNumber">AA-2-84920</span>
                   <span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold" id="ticketStatusText">WAITING</span>
                 </div>
@@ -298,12 +332,12 @@
                 <div class="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-gray-800/80">
                   <div class="bg-gray-900/80 rounded-xl p-2.5">
                     <span class="text-[10px] text-gray-400 block">Vehicles Ahead</span>
-                    <span class="text-xl font-black text-amber-400 font-mono" id="ticketAheadCount">8</span>
+                    <span class="text-xl font-black text-amber-400 font-mono" id="ticketAheadCount">0</span>
                     <span class="text-[9px] text-gray-500 block">የሚቀድሙ ተሽከርካሪዎች</span>
                   </div>
                   <div class="bg-gray-900/80 rounded-xl p-2.5">
                     <span class="text-[10px] text-gray-400 block">Estimated Wait</span>
-                    <span class="text-xl font-black text-sky-400 font-mono" id="ticketWaitMinutes">~14 min</span>
+                    <span class="text-xl font-black text-sky-400 font-mono" id="ticketWaitMinutes">~1 min</span>
                     <span class="text-[9px] text-gray-500 block">የሚገመት የጥበቃ ጊዜ</span>
                   </div>
                 </div>
@@ -312,19 +346,19 @@
               <!-- Siren & Voice Test Action -->
               <button onclick="playDriverAlertSoundAndVoice()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-gray-950 font-extrabold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2">
                 <span>🔊</span>
-                <span id="btnTestAudioText">Test 10-Min Siren & Voice Cue</span>
+                <span id="btnTestAudioText">Test 10-Min Siren &amp; Voice Cue</span>
               </button>
             </div>
 
             <!-- Leave Queue Action -->
-            <button onclick="mobileLeaveQueue()" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-red-400 text-xs font-semibold rounded-xl border border-gray-700 transition">
+            <button id="btnMobileLeaveQueue" onclick="mobileLeaveQueue()" class="hidden w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-red-400 text-xs font-semibold rounded-xl border border-gray-700 transition mt-3">
               Leave Queue (ከተራ ውጣ)
             </button>
           </div>
 
           <!-- Bottom Join Queue Modal Dialog (Within Phone) -->
           <div id="mobileJoinModal" class="hidden absolute inset-0 z-40 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-end">
-            <div class="bg-gray-900 border border-gray-700 rounded-3xl p-4 space-y-3 shadow-2xl">
+            <div class="bg-gray-900 border border-gray-700 rounded-3xl p-4 space-y-2.5 shadow-2xl">
               <div class="flex items-center justify-between">
                 <div>
                   <h4 class="text-xs font-extrabold text-white" id="joinModalStationTitle">Join Station Queue</h4>
@@ -334,21 +368,28 @@
               </div>
 
               <div>
-                <label class="block text-[10px] font-bold text-gray-300 mb-1">Driver Phone Number (የስልክ ቁጥር)</label>
-                <input type="tel" id="inputDriverPhone" value="0916123456" class="w-full bg-gray-950 border border-gray-700 text-white font-mono rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <label class="block text-[10px] font-bold text-gray-300 mb-0.5">Driver Name (የአሽከርካሪ ስም - አማራጭ)</label>
+                <input type="text" id="inputDriverName" placeholder="e.g. Abebe" class="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
               </div>
 
               <div>
-                <label class="block text-[10px] font-bold text-gray-300 mb-1">Ethiopian License Plate (የሰሌዳ ቁጥር)</label>
-                <input type="text" id="inputDriverPlate" value="AA-2-84920" class="w-full bg-gray-950 border border-gray-700 text-amber-400 uppercase font-mono font-bold rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <label class="block text-[10px] font-bold text-gray-300 mb-0.5">Driver Phone Number (የስልክ ቁጥር)</label>
+                <input type="tel" id="inputDriverPhone" value="0916123456" class="w-full bg-gray-950 border border-gray-700 text-white font-mono rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+              </div>
+
+              <div>
+                <label class="block text-[10px] font-bold text-gray-300 mb-0.5">Ethiopian License Plate (የሰሌዳ ቁጥር)</label>
+                <input type="text" id="inputDriverPlate" value="AA-2-84920" class="w-full bg-gray-950 border border-gray-700 text-amber-400 uppercase font-mono font-bold rounded-xl px-3 py-1.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
               </div>
 
               <div class="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[10px] text-amber-300">
-                ℹ️ Vehicle category is set by station coordinators. You are entering the currently active lane.
+                ℹ️ Permitted Lane: <strong id="modalStationCatBadge">BAJAJ</strong> (managed by Coordinator).
               </div>
 
-              <button onclick="submitJoinQueue()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold text-xs rounded-xl shadow-lg transition">
-                Confirm & Take Ticket (ተራ ያዝ)
+              <div id="mobileJoinError" class="hidden p-2 bg-red-950/90 border border-red-700 rounded-xl text-[10px] text-red-200"></div>
+
+              <button id="btnMobileConfirmJoin" onclick="submitJoinQueue()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold text-xs rounded-xl shadow-lg transition">
+                Confirm &amp; Take Ticket (ተራ ያዝ)
               </button>
             </div>
           </div>
@@ -362,33 +403,31 @@
     <div class="bg-gray-900 border border-gray-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-gray-800 pb-3">
         <h3 class="text-base font-extrabold text-white flex items-center gap-2">
-          <span>🚀</span> Live Testing & Installation Guide
+          <span>🚀</span> Live Cloud Firestore Testing Guide
         </h3>
         <button onclick="toggleModal('instructionsModal')" class="text-gray-400 hover:text-white text-lg">✕</button>
       </div>
 
       <div class="space-y-3 text-xs text-gray-300 leading-relaxed">
         <div class="bg-gray-950 p-3.5 rounded-2xl border border-gray-800">
-          <h4 class="font-bold text-amber-400 mb-1">1. How to Test Dual Synchronization in this Preview:</h4>
-          <p>The Web Admin (left) and Driver App (right) are connected to the shared real-time event bus. When you click <strong class="text-emerald-400">"Call Next Driver"</strong> on the left, the Driver's ticket headway on the right updates instantly. When wait time reaches 10 minutes or fewer, the loud siren and Amharic voice cue fire automatically!</p>
+          <h4 class="font-bold text-amber-400 mb-1">1. Single Shared Database (Firebase Project: foliisho):</h4>
+          <p>Both the Web Admin, Mobile Web App, and Android APK connect directly to <strong>Cloud Firestore</strong>. When a driver joins on any phone, their ticket (#, plate, phone) appears instantly in the Coordinator's <strong>Live Driver Queue</strong> list!</p>
         </div>
 
         <div class="bg-gray-950 p-3.5 rounded-2xl border border-gray-800">
           <h4 class="font-bold text-emerald-400 mb-1">2. Installing on Physical Android Phones:</h4>
           <ol class="list-decimal pl-5 space-y-1">
-            <li>Click the green <strong class="text-emerald-400">"Download Android APK"</strong> button at the top.</li>
-            <li>Transfer or download <code class="bg-gray-800 px-1 py-0.5 rounded text-amber-300">HawassaTransitDriver.apk</code> to your Android device.</li>
-            <li>Tap the APK to install (enable "Install unknown apps" if prompted).</li>
-            <li>Launch <strong>"Hawassa Transit Queue"</strong> to test native notifications, vibrator motor, and TextToSpeech!</li>
+            <li>Click <strong class="text-emerald-400">"Download Android APK"</strong> at the top.</li>
+            <li>Install on your Android device (enable "Install unknown apps" if prompted).</li>
+            <li>Book a slot on Android and watch it appear live in this Dashboard's Queue list!</li>
           </ol>
         </div>
 
         <div class="bg-gray-950 p-3.5 rounded-2xl border border-gray-800">
-          <h4 class="font-bold text-sky-400 mb-1">3. Running on PC Browser & Separate Devices:</h4>
+          <h4 class="font-bold text-sky-400 mb-1">3. Standalone Browser Views:</h4>
           <ul class="list-disc pl-5 space-y-1">
-            <li>Open <code class="bg-gray-800 px-1 py-0.5 rounded text-sky-300">/admin</code> in any computer browser for the full-screen Station Coordinator Web Admin.</li>
-            <li>Open <code class="bg-gray-800 px-1 py-0.5 rounded text-sky-300">/driver</code> on your mobile phone browser to test the full-screen Driver Web App.</li>
-            <li>Source code is available in the root directory: <code class="text-gray-400">app/</code> (Android Kotlin), <code class="text-gray-400">backend/server.js</code> (Node.js API), and <code class="text-gray-400">web-admin.html</code>.</li>
+            <li><code class="bg-gray-800 px-1 py-0.5 rounded text-sky-300">/admin</code> — Full-screen Station Coordinator Web Admin.</li>
+            <li><code class="bg-gray-800 px-1 py-0.5 rounded text-sky-300">/driver</code> — Full-screen Driver Web App.</li>
           </ul>
         </div>
       </div>
@@ -401,112 +440,8 @@
     </div>
   </div>
 
-  <!-- JAVASCRIPT: SHARED STATE & REAL-TIME AUDIO / SYNCHRONIZATION -->
+  <!-- JAVASCRIPT: CLOUD FIRESTORE REAL-TIME SYNCHRONIZATION -->
   <script>
-    // System Data & Multi-Station State
-    const stations = [
-      {
-        id: "benzene_madya",
-        nameEn: "Benzene Madya Central",
-        nameAm: "ቤንዚን ማድያ ዋና ጣቢያ",
-        neighborhoodEn: "Piazza / Menahariya Road",
-        neighborhoodAm: "ፒያሳ ወደ መናኸሪያ መታጠፊያ",
-        distanceKm: 1.2,
-        benzeneStatus: "AVAILABLE",
-        dieselStatus: "AVAILABLE",
-        congestion: "MODERATE",
-        activePermittedCategory: "BAJAJ",
-        lanes: {
-          BAJAJ: { currentlyServing: 118, lastAssigned: 126, avgSec: 110 },
-          TAXI_MINIBUS: { currentlyServing: 62, lastAssigned: 68, avgSec: 240 },
-          PUBLIC_BUS: { currentlyServing: 21, lastAssigned: 24, avgSec: 480 },
-          CAR: { currentlyServing: 39, lastAssigned: 45, avgSec: 180 },
-          MOTORCYCLE: { currentlyServing: 16, lastAssigned: 18, avgSec: 90 },
-          TRUCK_HEAVY: { currentlyServing: 10, lastAssigned: 12, avgSec: 800 }
-        }
-      },
-      {
-        id: "total_menahariya",
-        nameEn: "TotalEnergies Menahariya",
-        nameAm: "ቶታል ኢነርጂ መናኸሪያ",
-        neighborhoodEn: "Main Bus Terminal",
-        neighborhoodAm: "ሀዋሳ አውቶቡስ መናኸሪያ",
-        distanceKm: 2.1,
-        benzeneStatus: "AVAILABLE",
-        dieselStatus: "AVAILABLE",
-        congestion: "HEAVY",
-        activePermittedCategory: "TAXI_MINIBUS",
-        lanes: {
-          BAJAJ: { currentlyServing: 138, lastAssigned: 160, avgSec: 110 },
-          TAXI_MINIBUS: { currentlyServing: 81, lastAssigned: 95, avgSec: 220 },
-          PUBLIC_BUS: { currentlyServing: 27, lastAssigned: 35, avgSec: 500 },
-          CAR: { currentlyServing: 42, lastAssigned: 52, avgSec: 190 },
-          MOTORCYCLE: { currentlyServing: 19, lastAssigned: 22, avgSec: 90 },
-          TRUCK_HEAVY: { currentlyServing: 14, lastAssigned: 18, avgSec: 850 }
-        }
-      },
-      {
-        id: "noc_piassa",
-        nameEn: "NOC Piassa Central",
-        nameAm: "ኤን ኦ ሲ ፒያሳ መሀል ከተማ",
-        neighborhoodEn: "Piassa Commercial Center",
-        neighborhoodAm: "ፒያሳ የንግድ ማዕከል",
-        distanceKm: 0.8,
-        benzeneStatus: "AVAILABLE",
-        dieselStatus: "LOW_STOCK",
-        congestion: "LOW",
-        activePermittedCategory: "BAJAJ",
-        lanes: {
-          BAJAJ: { currentlyServing: 82, lastAssigned: 88, avgSec: 100 },
-          TAXI_MINIBUS: { currentlyServing: 28, lastAssigned: 32, avgSec: 240 },
-          PUBLIC_BUS: { currentlyServing: 9, lastAssigned: 10, avgSec: 540 },
-          CAR: { currentlyServing: 27, lastAssigned: 30, avgSec: 180 },
-          MOTORCYCLE: { currentlyServing: 14, lastAssigned: 15, avgSec: 90 },
-          TRUCK_HEAVY: { currentlyServing: 5, lastAssigned: 6, avgSec: 900 }
-        }
-      },
-      {
-        id: "ola_datto",
-        nameEn: "Ola Energy Datto",
-        nameAm: "ኦላ ኢነርጂ ዳቶ",
-        neighborhoodEn: "Datto Industrial Corridor",
-        neighborhoodAm: "ዳቶ ኢንዱስትሪ ኮሪደር",
-        distanceKm: 2.8,
-        benzeneStatus: "OUT_OF_STOCK",
-        dieselStatus: "AVAILABLE",
-        congestion: "LOW",
-        activePermittedCategory: "TRUCK_HEAVY",
-        lanes: {
-          BAJAJ: { currentlyServing: 45, lastAssigned: 45, avgSec: 110 },
-          TAXI_MINIBUS: { currentlyServing: 30, lastAssigned: 30, avgSec: 240 },
-          PUBLIC_BUS: { currentlyServing: 12, lastAssigned: 12, avgSec: 480 },
-          CAR: { currentlyServing: 18, lastAssigned: 18, avgSec: 180 },
-          MOTORCYCLE: { currentlyServing: 8, lastAssigned: 8, avgSec: 90 },
-          TRUCK_HEAVY: { currentlyServing: 11, lastAssigned: 14, avgSec: 850 }
-        }
-      },
-      {
-        id: "tabor_oil",
-        nameEn: "National Oil Tabor",
-        nameAm: "ናሽናል ኦይል ታቦር",
-        neighborhoodEn: "Mount Tabor Transit",
-        neighborhoodAm: "ታቦር ተራራ መታጠፊያ",
-        distanceKm: 3.3,
-        benzeneStatus: "AVAILABLE",
-        dieselStatus: "AVAILABLE",
-        congestion: "MODERATE",
-        activePermittedCategory: "CAR",
-        lanes: {
-          BAJAJ: { currentlyServing: 68, lastAssigned: 75, avgSec: 110 },
-          TAXI_MINIBUS: { currentlyServing: 44, lastAssigned: 50, avgSec: 230 },
-          PUBLIC_BUS: { currentlyServing: 15, lastAssigned: 18, avgSec: 510 },
-          CAR: { currentlyServing: 30, lastAssigned: 35, avgSec: 190 },
-          MOTORCYCLE: { currentlyServing: 11, lastAssigned: 12, avgSec: 90 },
-          TRUCK_HEAVY: { currentlyServing: 8, lastAssigned: 10, avgSec: 850 }
-        }
-      }
-    ];
-
     const vehicleCategories = [
       { key: "BAJAJ", labelEn: "Bajaj", labelAm: "ባጃጅ", icon: "🛺" },
       { key: "TAXI_MINIBUS", labelEn: "Taxi / Minibus", labelAm: "ታክሲ", icon: "🚐" },
@@ -516,74 +451,23 @@
       { key: "TRUCK_HEAVY", labelEn: "Truck", labelAm: "የጭነት", icon: "🚛" }
     ];
 
-    // Current State
     let isAmharic = true;
     let currentAdminStationId = "benzene_madya";
-    let activeTicket = {
-      stationId: "benzene_madya",
-      ticketNumber: 126,
-      licensePlate: "AA-2-84920",
-      phone: "0916123456",
-      category: "BAJAJ",
-      status: "WAITING",
-      hasAlerted10Min: false
-    };
+    let adminQueueFilter = "LANE";
+    let stations = [];
+    let allTickets = [];
+    let activeTicket = null;
+    let hasAlerted10Min = false;
 
-    // Real-Time Cross-Tab / Cross-Window Broadcast Channel
-    const queueBus = new BroadcastChannel("hawassa_queue_bus");
-    queueBus.onmessage = (e) => {
-      handleIncomingEvent(e.data);
-    };
-
-    // Initialize Server-Sent Events (SSE) connection with live Cloud Database & Backend
-    function initSSE() {
-      if (window.HawassaCloudSync) {
-        window.HawassaCloudSync.initRealtimeStream((connected, msg) => {
-          document.getElementById('topSyncStatus').textContent = msg;
-        });
-        window.HawassaCloudSync.onEvent((data) => {
-          handleIncomingEvent(data);
-        });
-      }
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    function broadcastEvent(eventData) {
-      queueBus.postMessage(eventData);
-      handleIncomingEvent(eventData);
-    }
-
-    function handleIncomingEvent(data) {
-      if (!data) return;
-      if (data.type === "PERMITTED_CATEGORY_CHANGED") {
-        const st = stations.find(s => s.id === data.stationId);
-        if (st) {
-          st.activePermittedCategory = data.activePermittedCategory;
-          renderAdminPanel();
-          renderMobileRadar();
-          showToast(`Announced: ${data.activePermittedCategory} allowed at ${st.nameEn}`);
-        }
-      } else if (data.type === "QUEUE_ADVANCED") {
-        const st = stations.find(s => s.id === data.stationId);
-        if (st && st.lanes[data.category]) {
-          st.lanes[data.category].currentlyServing = data.currentlyServing;
-          renderAdminPanel();
-          updateMobileTicket();
-        }
-      } else if (data.type === "TEN_MINUTE_ALERT_BROADCAST") {
-        playDriverAlertSoundAndVoice();
-        showToast("🚨 10-Minute Warning Broadcasted by Station Coordinator!");
-      } else if (data.type === "FUEL_STATUS_UPDATED") {
-        const st = stations.find(s => s.id === data.stationId);
-        if (st) {
-          if (data.isBenzene) st.benzeneStatus = data.status;
-          else st.dieselStatus = data.status;
-          renderAdminPanel();
-          renderMobileRadar();
-        }
-      }
-    }
-
-    // View Mode Switcher: Dual (Side-by-side) / Admin PC / Driver Mobile
     function setViewMode(mode) {
       const dual = document.getElementById('viewDualContainer');
       const btnDual = document.getElementById('tabDual');
@@ -619,7 +503,6 @@
       }
     }
 
-    // Toggle Global Language
     function toggleGlobalLang() {
       isAmharic = !isAmharic;
       document.getElementById('globalLangLabel').textContent = isAmharic ? 'English' : 'አማርኛ';
@@ -629,126 +512,109 @@
       showToast(isAmharic ? 'ቋንቋው ወደ አማርኛ ተቀይሯል' : 'Language switched to English');
     }
 
-    // Station Coordinator Actions
     function onAdminStationChange() {
       currentAdminStationId = document.getElementById('adminStationSelect').value;
       renderAdminPanel();
     }
 
-    function adminSelectPermittedCategory(catKey) {
-      if (window.HawassaSharedStore) {
-        window.HawassaSharedStore.setPermittedCategory(currentAdminStationId, catKey);
-      }
-      const st = stations.find(s => s.id === currentAdminStationId);
-      if (st) st.activePermittedCategory = catKey;
-      
-      broadcastEvent({
-        type: "PERMITTED_CATEGORY_CHANGED",
-        stationId: currentAdminStationId,
-        activePermittedCategory: catKey
-      });
-
-      if (window.HawassaCloudSync) {
-        window.HawassaCloudSync.announcePermittedCategory(currentAdminStationId, catKey);
-      }
-
-      renderAdminPanel();
-      renderMobileRadar();
-      document.getElementById('adminAuditText').textContent = `Announced category: ${catKey}`;
-      showToast(`✓ Category [${catKey}] announced immediately across all interfaces!`);
+    function setAdminQueueFilter(mode) {
+      adminQueueFilter = mode;
+      document.getElementById('dualFilterLane').className = mode === 'LANE'
+        ? "px-2.5 py-1 rounded font-bold bg-amber-500 text-gray-950"
+        : "px-2.5 py-1 rounded font-bold text-gray-400 hover:text-white";
+      document.getElementById('dualFilterAll').className = mode === 'ALL'
+        ? "px-2.5 py-1 rounded font-bold bg-amber-500 text-gray-950"
+        : "px-2.5 py-1 rounded font-bold text-gray-400 hover:text-white";
+      renderAdminQueueList();
     }
 
-    function adminCallNext() {
-      const st = stations.find(s => s.id === currentAdminStationId);
-      if (!st) return;
-      const cat = st.activePermittedCategory;
-      let newServing = 0;
-
-      if (window.HawassaSharedStore) {
-        newServing = window.HawassaSharedStore.advanceQueue(currentAdminStationId, cat);
-      } else {
-        const lane = st.lanes[cat];
-        if (lane) {
-          lane.currentlyServing += 1;
-          newServing = lane.currentlyServing;
-        }
+    async function adminSelectPermittedCategory(catKey) {
+      try {
+        await window.HawassaFirestore.setPermittedCategory(currentAdminStationId, catKey);
+        document.getElementById('adminAuditText').textContent = `Announced: ${catKey}`;
+        showToast(`✓ Category [${catKey}] synced live via Firestore!`);
+      } catch (e) {
+        showToast(`❌ Failed: ${e.message || e}`);
       }
-
-      broadcastEvent({
-        type: "QUEUE_ADVANCED",
-        stationId: currentAdminStationId,
-        category: cat,
-        currentlyServing: newServing
-      });
-
-      if (window.HawassaCloudSync) {
-        window.HawassaCloudSync.callNextDriver(currentAdminStationId, cat, newServing);
-      }
-
-      renderAdminPanel();
-      updateMobileTicket();
-      document.getElementById('adminAuditText').textContent = `Called Next: #${newServing}`;
-      showToast(`⏩ Called driver #${newServing} - Centralized store updated immediately!`);
     }
 
-    function adminBroadcastTenMinAlert() {
+    async function adminCallNext() {
       const st = stations.find(s => s.id === currentAdminStationId);
       if (!st) return;
-
-      broadcastEvent({
-        type: "TEN_MINUTE_ALERT_BROADCAST",
-        stationId: st.id,
-        category: st.activePermittedCategory
-      });
-
-      if (window.HawassaCloudSync) {
-        window.HawassaCloudSync.broadcastTenMinAlert(st.id, st.activePermittedCategory);
+      const cat = st.activePermittedCategory || "BAJAJ";
+      try {
+        const nextNum = await window.HawassaFirestore.callNextDriver(currentAdminStationId, cat);
+        document.getElementById('adminAuditText').textContent = `Called Next: #${nextNum}`;
+        showToast(`⏩ Called #${nextNum} across all phones!`);
+      } catch (e) {
+        showToast(`❌ Failed to call next: ${e.message || e}`);
       }
-
-      playDriverAlertSoundAndVoice();
-      document.getElementById('adminAuditText').textContent = "Broadcasted 10-Min Alert";
-      showToast("📢 10-Minute Audible Alert broadcasted immediately!");
     }
 
-    function adminToggleFuel(type) {
+    async function adminCallTicket(ticketId) {
+      const ticket = allTickets.find(t => t.ticketId === ticketId);
+      if (!ticket) return;
+      try {
+        await window.HawassaFirestore.callSpecificTicket(ticket);
+        document.getElementById('adminAuditText').textContent = `Called #${ticket.ticketNumber}`;
+        showToast(`📢 Called #${ticket.ticketNumber} (${ticket.licensePlate})!`);
+      } catch (e) {
+        showToast(`❌ Error calling ticket: ${e.message || e}`);
+      }
+    }
+
+    async function adminServeTicket(ticketId) {
+      try {
+        await window.HawassaFirestore.markTicketServed(ticketId);
+        showToast("✓ Ticket marked as served.");
+      } catch (e) {
+        showToast(`❌ Error: ${e.message || e}`);
+      }
+    }
+
+    async function adminCancelTicket(ticketId) {
+      try {
+        await window.HawassaFirestore.cancelTicket(ticketId);
+        showToast("Ticket cancelled.");
+      } catch (e) {
+        showToast(`❌ Error: ${e.message || e}`);
+      }
+    }
+
+    async function adminBroadcastTenMinAlert() {
       const st = stations.find(s => s.id === currentAdminStationId);
       if (!st) return;
+      try {
+        await window.HawassaFirestore.broadcastTenMinAlert(st.id, st.activePermittedCategory);
+        document.getElementById('adminAuditText').textContent = "Broadcasted 10-Min Alert";
+        showToast("📢 10-Minute Alert broadcasted live via Firestore!");
+      } catch (e) {
+        showToast(`❌ Error: ${e.message || e}`);
+      }
+    }
 
+    async function adminToggleFuel(type) {
+      const st = stations.find(s => s.id === currentAdminStationId);
+      if (!st) return;
       const isBenzene = (type === 'benzene');
       const newStatus = isBenzene
         ? (st.benzeneStatus === 'AVAILABLE' ? 'OUT_OF_STOCK' : 'AVAILABLE')
         : (st.dieselStatus === 'AVAILABLE' ? 'LOW_STOCK' : 'AVAILABLE');
-
-      if (window.HawassaSharedStore) {
-        window.HawassaSharedStore.updateFuelStatus(currentAdminStationId, isBenzene, newStatus);
-      } else {
-        if (isBenzene) st.benzeneStatus = newStatus;
-        else st.dieselStatus = newStatus;
+      try {
+        await window.HawassaFirestore.updateFuelStock(currentAdminStationId, isBenzene, newStatus);
+        showToast(`${isBenzene ? 'Benzene' : 'Diesel'} -> ${newStatus}`);
+      } catch (e) {
+        showToast(`❌ Error: ${e.message || e}`);
       }
-
-      broadcastEvent({
-        type: "FUEL_STATUS_UPDATED",
-        stationId: currentAdminStationId,
-        isBenzene,
-        status: newStatus
-      });
-
-      if (window.HawassaCloudSync) {
-        window.HawassaCloudSync.updateFuelStock(currentAdminStationId, isBenzene, newStatus);
-      }
-
-      renderAdminPanel();
-      renderMobileRadar();
     }
 
-    // Render Web Admin Panel
     function renderAdminPanel() {
-      const st = stations.find(s => s.id === currentAdminStationId);
+      const st = stations.find(s => s.id === currentAdminStationId) || stations[0];
       if (!st) return;
 
       const catContainer = document.getElementById('adminCategoryButtons');
       catContainer.innerHTML = '';
-      
+
       vehicleCategories.forEach(cat => {
         const isSelected = (st.activePermittedCategory === cat.key);
         const btn = document.createElement('button');
@@ -761,11 +627,11 @@
       });
 
       const activeCatObj = vehicleCategories.find(c => c.key === st.activePermittedCategory);
-      document.getElementById('currentAnnouncedCat').textContent = activeCatObj 
-        ? `${activeCatObj.key} (${isAmharic ? activeCatObj.labelAm : activeCatObj.labelEn})` 
+      document.getElementById('currentAnnouncedCat').textContent = activeCatObj
+        ? `${activeCatObj.key} (${isAmharic ? activeCatObj.labelAm : activeCatObj.labelEn})`
         : st.activePermittedCategory;
 
-      const lane = st.lanes[st.activePermittedCategory] || { currentlyServing: 0, lastAssigned: 0 };
+      const lane = (st.lanes && st.lanes[st.activePermittedCategory]) || { currentlyServing: 0, lastAssigned: 0 };
       document.getElementById('adminDispServing').textContent = '#' + lane.currentlyServing;
       document.getElementById('adminDispLast').textContent = '#' + lane.lastAssigned;
       document.getElementById('adminDispWaiting').textContent = Math.max(0, lane.lastAssigned - lane.currentlyServing);
@@ -775,9 +641,57 @@
 
       document.getElementById('adminDieselStatusBadge').textContent = st.dieselStatus;
       document.getElementById('adminDieselStatusBadge').className = st.dieselStatus === 'AVAILABLE' ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold';
+
+      renderAdminQueueList();
     }
 
-    // Mobile Driver App Logic
+    function renderAdminQueueList() {
+      const container = document.getElementById('adminLiveQueueList');
+      const st = stations.find(s => s.id === currentAdminStationId);
+      const currentCat = st ? st.activePermittedCategory : 'BAJAJ';
+
+      const stationTickets = allTickets.filter(t => t.stationId === currentAdminStationId);
+      const filtered = adminQueueFilter === 'ALL'
+        ? stationTickets
+        : stationTickets.filter(t => t.vehicleCategory === currentCat);
+
+      document.getElementById('adminLiveQueueCount').textContent = filtered.length;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center py-4 text-[11px] text-gray-500">No active bookings in ${escapeHtml(adminQueueFilter === 'ALL' ? 'this station' : currentCat)} yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const isCalled = t.status === 'CALLED' || t.status === 'SERVING';
+        const safeId = escapeHtml(t.ticketId);
+        return `
+          <div class="p-2.5 rounded-xl bg-gray-900 border ${isCalled ? 'border-emerald-600/60' : 'border-gray-800'} flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="px-2 py-1 rounded-lg font-mono font-black ${isCalled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}">
+                #${escapeHtml(t.ticketNumber)}
+              </span>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-mono font-bold text-white">${escapeHtml(t.licensePlate)}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">${escapeHtml(t.vehicleCategory)}</span>
+                  ${isCalled ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold">CALLED${t.calledPumpNumber ? ' • P' + escapeHtml(t.calledPumpNumber) : ''}</span>` : ''}
+                </div>
+                <div class="text-[10px] text-gray-400">
+                  👤 ${escapeHtml(t.driverName || 'Driver')} • <a href="tel:${escapeHtml(t.phoneNumber)}" class="text-sky-400 hover:underline font-mono">${escapeHtml(t.phoneNumber)}</a>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button onclick="adminCallTicket('${safeId}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold">Call</button>
+              <button onclick="adminServeTicket('${safeId}')" class="px-2.5 py-1 rounded-lg bg-sky-700 hover:bg-sky-600 text-white text-[10px] font-bold">Served</button>
+              <button onclick="adminCancelTicket('${safeId}')" class="px-2 py-1 rounded-lg bg-gray-800 hover:bg-red-700 text-gray-300 hover:text-white text-[10px] font-bold">✕</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
     function switchMobileTab(tab) {
       const screenRadar = document.getElementById('mobileScreenRadar');
       const screenTicket = document.getElementById('mobileScreenTicket');
@@ -805,60 +719,62 @@
       stations.forEach(st => {
         const card = document.createElement('div');
         card.className = "bg-gray-950 border border-gray-800 hover:border-gray-700 rounded-2xl p-3 space-y-2 transition shadow-md";
-        
+
         const activeCatObj = vehicleCategories.find(c => c.key === st.activePermittedCategory);
         const catLabel = activeCatObj ? (isAmharic ? activeCatObj.labelAm : activeCatObj.labelEn) : st.activePermittedCategory;
-        const lane = st.lanes[st.activePermittedCategory] || { currentlyServing: 0, lastAssigned: 0, avgSec: 120 };
-        const waiting = Math.max(0, lane.lastAssigned - lane.currentlyServing);
+        const lane = (st.lanes && st.lanes[st.activePermittedCategory]) || { currentlyServing: 0, lastAssigned: 0, isActive: true };
+        const isPaused = lane.isActive === false;
+        const congestion = st.congestionLevel || "MODERATE";
 
         card.innerHTML = `
           <div class="flex items-start justify-between">
             <div>
-              <h4 class="text-xs font-extrabold text-white">${isAmharic ? st.nameAm : st.nameEn}</h4>
-              <p class="text-[10px] text-gray-400">${isAmharic ? st.neighborhoodAm : st.neighborhoodEn} • ${st.distanceKm} km</p>
+              <h4 class="text-xs font-extrabold text-white">${escapeHtml(isAmharic ? st.nameAm : st.nameEn)}</h4>
+              <p class="text-[10px] text-gray-400">${escapeHtml(isAmharic ? st.neighborhoodAm : st.neighborhoodEn)} • ${escapeHtml(st.distanceKm)} km</p>
             </div>
-            <span class="text-[9px] font-mono px-2 py-0.5 rounded ${st.congestion === 'LOW' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : (st.congestion === 'MODERATE' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-red-950 text-red-400 border border-red-800')}">
-              ${st.congestion}
+            <span class="text-[9px] font-mono px-2 py-0.5 rounded ${congestion === 'LOW' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : (congestion === 'MODERATE' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-red-950 text-red-400 border border-red-800')}">
+              ${escapeHtml(congestion)}
             </span>
           </div>
 
-          <!-- Permitted Category Badge -->
           <div class="bg-gray-900 border border-gray-800 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[10px]">
             <span class="text-amber-400 font-bold flex items-center gap-1">
               <span>${activeCatObj ? activeCatObj.icon : '🚗'}</span>
-              <span>${isAmharic ? 'የተፈቀደው: ' : 'Permitted: '}<strong>${catLabel}</strong></span>
+              <span>${isAmharic ? 'የተፈቀደው: ' : 'Permitted: '}<strong>${escapeHtml(catLabel)}</strong></span>
             </span>
-            <span class="text-gray-400 font-mono">#${lane.currentlyServing} / #${lane.lastAssigned}</span>
+            <span class="text-gray-400 font-mono">#${escapeHtml(lane.currentlyServing)} / #${escapeHtml(lane.lastAssigned)}</span>
           </div>
 
-          <!-- Fuel & Join Action -->
           <div class="flex items-center justify-between pt-1">
             <div class="flex items-center space-x-1.5 text-[9px] font-bold">
               <span class="${st.benzeneStatus === 'AVAILABLE' ? 'text-emerald-400' : 'text-red-400'}">⛽ Benzene</span>
               <span class="text-gray-600">•</span>
               <span class="${st.dieselStatus === 'AVAILABLE' ? 'text-emerald-400' : 'text-amber-400'}">🛢️ Diesel</span>
             </div>
-            <button onclick="openJoinModalForStation('${st.id}')" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-gray-950 text-[10px] font-extrabold rounded-lg shadow transition">
-              ${isAmharic ? 'ተራ ያዝ' : 'Join Queue'}
+            <button onclick="openJoinModalForStation('${escapeHtml(st.id)}')" ${isPaused ? 'disabled' : ''} class="px-3 py-1 ${isPaused ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-400 active:scale-95 text-gray-950'} text-[10px] font-extrabold rounded-lg shadow transition">
+              ${isPaused ? (isAmharic ? 'ቆሟል' : 'Paused') : (isAmharic ? 'ተራ ያዝ' : 'Join Queue')}
             </button>
           </div>
         `;
         list.appendChild(card);
       });
 
-      // Update Top Announcement
-      const bst = stations.find(s => s.id === "benzene_madya") || stations[0];
-      const activeCatObj = vehicleCategories.find(c => c.key === bst.activePermittedCategory);
-      document.getElementById('mobileAnnouncementBody').textContent = isAmharic
-        ? `አሁን የተፈቀደው: ${activeCatObj ? activeCatObj.labelAm : bst.activePermittedCategory} በ${bst.nameAm}`
-        : `Now Serving: ${activeCatObj ? activeCatObj.labelEn : bst.activePermittedCategory} at ${bst.nameEn}`;
+      if (stations.length > 0) {
+        const bst = stations.find(s => s.id === currentAdminStationId) || stations[0];
+        const activeCatObj = vehicleCategories.find(c => c.key === bst.activePermittedCategory);
+        document.getElementById('mobileAnnouncementBody').textContent = isAmharic
+          ? `አሁን የተፈቀደው: ${activeCatObj ? activeCatObj.labelAm : bst.activePermittedCategory} በ${bst.nameAm}`
+          : `Now Serving: ${activeCatObj ? activeCatObj.labelEn : bst.activePermittedCategory} at ${bst.nameEn}`;
+      }
     }
 
     function openJoinModalForStation(stationId) {
       const st = stations.find(s => s.id === stationId);
       if (!st) return;
       document.getElementById('joinModalStationTitle').textContent = isAmharic ? `${st.nameAm} ተራ መያዣ` : `Join ${st.nameEn}`;
+      document.getElementById('modalStationCatBadge').textContent = st.activePermittedCategory || 'BAJAJ';
       document.getElementById('mobileJoinModal').dataset.stationId = stationId;
+      document.getElementById('mobileJoinError').classList.add('hidden');
       document.getElementById('mobileJoinModal').classList.remove('hidden');
     }
 
@@ -866,77 +782,127 @@
       document.getElementById('mobileJoinModal').classList.add('hidden');
     }
 
-    function submitJoinQueue() {
+    async function submitJoinQueue() {
       const stationId = document.getElementById('mobileJoinModal').dataset.stationId || "benzene_madya";
+      const driverName = document.getElementById('inputDriverName').value.trim();
       const phone = document.getElementById('inputDriverPhone').value.trim();
       const plate = document.getElementById('inputDriverPlate').value.trim().toUpperCase();
+      const errEl = document.getElementById('mobileJoinError');
+      const btn = document.getElementById('btnMobileConfirmJoin');
 
-      if (!phone || !plate) {
-        showToast("Please enter valid phone and license plate");
-        return;
-      }
+      errEl.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = "Saving to Firestore...";
 
-      const st = stations.find(s => s.id === stationId);
-      const cat = st ? st.activePermittedCategory : "BAJAJ";
-      const lane = st ? st.lanes[cat] : { currentlyServing: 100, lastAssigned: 105 };
-
-      lane.lastAssigned += 1;
-
-      activeTicket = {
-        stationId: stationId,
-        ticketNumber: lane.lastAssigned,
-        licensePlate: plate,
-        phone: phone,
-        category: cat,
-        status: "WAITING",
-        hasAlerted10Min: false
-      };
-
-      closeJoinModal();
-      switchMobileTab('ticket');
-      showToast(`Joined queue at ${st.nameEn} with ticket #${lane.lastAssigned}`);
-
-      // Call API
-      fetch('/api/queue/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      try {
+        const st = stations.find(s => s.id === stationId);
+        const ticket = await window.HawassaFirestore.joinQueue({
           stationId,
           driverPhone: phone,
           licensePlate: plate,
-          driverName: "Driver"
-        })
-      }).catch(() => {});
+          driverName: driverName || "Driver",
+          vehicleCategory: st ? st.activePermittedCategory : undefined
+        });
 
-      renderAdminPanel();
+        activeTicket = ticket;
+        hasAlerted10Min = false;
+        window.HawassaFirestore.subscribeToTicket(ticket.ticketId, onDriverTicketSnapshot);
+
+        closeJoinModal();
+        switchMobileTab('ticket');
+        showToast(`✓ Booked Ticket #${ticket.ticketNumber} in Cloud Firestore!`);
+      } catch (err) {
+        errEl.textContent = err.message || "Booking failed. Please check fields or Firestore rules.";
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Confirm & Take Ticket (ተራ ያዝ)";
+      }
     }
 
-    function mobileLeaveQueue() {
-      activeTicket.status = "CANCELLED";
-      switchMobileTab('radar');
-      showToast("Left queue");
+    function onDriverTicketSnapshot(ticket) {
+      if (!ticket) {
+        activeTicket = null;
+        window.HawassaFirestore.clearSavedTicketId();
+        updateMobileTicket();
+        return;
+      }
+      const prevStatus = activeTicket ? activeTicket.status : null;
+      activeTicket = ticket;
+      updateMobileTicket();
+      if (ticket.status === 'CALLED' && prevStatus !== 'CALLED') {
+        playDriverAlertSoundAndVoice();
+      }
+    }
+
+    async function mobileLeaveQueue() {
+      if (!activeTicket) return;
+      try {
+        await window.HawassaFirestore.leaveQueue(activeTicket.ticketId);
+        activeTicket = null;
+        switchMobileTab('radar');
+        showToast("Left queue in Firestore");
+      } catch (e) {
+        showToast("Error: " + (e.message || e));
+      }
     }
 
     function updateMobileTicket() {
-      if (!activeTicket) return;
-      const st = stations.find(s => s.id === activeTicket.stationId) || stations[0];
-      const lane = st.lanes[activeTicket.category] || { currentlyServing: activeTicket.ticketNumber - 1, avgSec: 120 };
-      
-      document.getElementById('ticketStationName').textContent = isAmharic ? st.nameAm : st.nameEn;
+      const noTicketBox = document.getElementById('mobileNoTicketBox');
+      const activeBox = document.getElementById('mobileActiveTicketBox');
+      const leaveBtn = document.getElementById('btnMobileLeaveQueue');
+
+      if (!activeTicket) {
+        noTicketBox.classList.remove('hidden');
+        activeBox.classList.add('hidden');
+        leaveBtn.classList.add('hidden');
+        return;
+      }
+
+      noTicketBox.classList.add('hidden');
+      activeBox.classList.remove('hidden');
+      leaveBtn.classList.remove('hidden');
+
+      const st = stations.find(s => s.id === activeTicket.stationId);
+      const lane = (st && st.lanes && st.lanes[activeTicket.vehicleCategory])
+        ? st.lanes[activeTicket.vehicleCategory]
+        : { currentlyServing: Math.max(0, activeTicket.ticketNumber - 1), avgDurationSeconds: 120 };
+
+      const stLabel = st
+        ? (isAmharic ? st.nameAm : st.nameEn)
+        : (isAmharic ? activeTicket.stationNameAm : activeTicket.stationNameEn);
+
+      document.getElementById('ticketStationName').textContent = stLabel || activeTicket.stationId;
       document.getElementById('ticketTokenNumber').textContent = '#' + activeTicket.ticketNumber;
       document.getElementById('ticketPlateNumber').textContent = activeTicket.licensePlate;
 
-      const ahead = Math.max(0, activeTicket.ticketNumber - lane.currentlyServing);
+      const statusEl = document.getElementById('ticketStatusText');
+      if (activeTicket.status === 'CALLED') {
+        statusEl.textContent = `CALLED • PUMP #${activeTicket.calledPumpNumber || 1}`;
+        statusEl.className = "bg-emerald-500 text-gray-950 px-2 py-0.5 rounded font-black";
+      } else if (activeTicket.status === 'COMPLETED') {
+        statusEl.textContent = "COMPLETED";
+        statusEl.className = "bg-sky-950 text-sky-300 border border-sky-700 px-2 py-0.5 rounded font-bold";
+      } else if (activeTicket.status === 'CANCELLED') {
+        statusEl.textContent = "CANCELLED";
+        statusEl.className = "bg-red-950 text-red-400 border border-red-800 px-2 py-0.5 rounded font-bold";
+      } else {
+        statusEl.textContent = activeTicket.status || "WAITING";
+        statusEl.className = "bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-bold";
+      }
+
+      const ahead = Math.max(0, activeTicket.ticketNumber - (lane.currentlyServing || 0));
       document.getElementById('ticketAheadCount').textContent = ahead;
 
-      const waitMinutes = Math.max(1, Math.floor((ahead * (lane.avgSec || 120)) / 60));
-      document.getElementById('ticketWaitMinutes').textContent = `~${waitMinutes} min`;
+      const avgSec = lane.avgDurationSeconds || 120;
+      const waitMinutes = activeTicket.status === 'CALLED' ? 0 : Math.max(1, Math.floor((ahead * avgSec) / 60));
+      document.getElementById('ticketWaitMinutes').textContent = activeTicket.status === 'CALLED' ? 'NOW!' : `~${waitMinutes} min`;
 
       const alertBanner = document.getElementById('mobileTenMinAlertBanner');
-      if (ahead <= 3 || waitMinutes <= 10) {
+      if ((activeTicket.status === 'WAITING' || activeTicket.status === 'CALLED') && (ahead <= 3 || waitMinutes <= 10 || activeTicket.status === 'CALLED')) {
         alertBanner.classList.remove('hidden');
-        if (!activeTicket.hasAlerted10Min) {
-          activeTicket.hasAlerted10Min = true;
+        if (!hasAlerted10Min) {
+          hasAlerted10Min = true;
           playDriverAlertSoundAndVoice();
         }
       } else {
@@ -944,9 +910,7 @@
       }
     }
 
-    // High Priority Bilingual Audio & Siren Synthesis (Web Audio & Speech API)
     function playDriverAlertSoundAndVoice() {
-      // 1. Dual Siren Buzzer Tone (Web Audio API)
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (AudioCtx) {
@@ -954,8 +918,7 @@
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.type = 'sawtooth';
-          
-          // Emergency frequency sweep
+
           osc.frequency.setValueAtTime(880, ctx.currentTime);
           osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
           osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.6);
@@ -971,12 +934,10 @@
         }
       } catch (e) {}
 
-      // 2. Physical Vibration (if supported by mobile device)
       if (navigator.vibrate) {
         navigator.vibrate([400, 200, 400, 200, 600]);
       }
 
-      // 3. Clear Bilingual Voice Alert (Web Speech API)
       setTimeout(() => {
         if ('speechSynthesis' in window) {
           window.speechSynthesis.cancel();
@@ -1006,7 +967,6 @@
       modal.classList.toggle('hidden');
     }
 
-    // Phone Clock Ticker
     function updatePhoneClock() {
       const now = new Date();
       const hrs = String(now.getHours()).padStart(2, '0');
@@ -1014,22 +974,60 @@
       document.getElementById('phoneClock').textContent = `${hrs}:${min}`;
     }
 
-    // Initialize Everything
-    window.addEventListener('DOMContentLoaded', () => {
-      if (window.HawassaSharedStore) {
-        window.HawassaSharedStore.subscribe((updatedStations) => {
-          stations = updatedStations;
-          renderAdminPanel();
-          renderMobileRadar();
-          updateMobileTicket();
-        });
+    window.addEventListener('DOMContentLoaded', async () => {
+      updatePhoneClock();
+      setInterval(updatePhoneClock, 10000);
+
+      if (!window.HawassaFirestore) return;
+
+      window.HawassaFirestore.onStatusChange((connected, msg) => {
+        const textEl = document.getElementById('topSyncStatus');
+        const dotEl = document.getElementById('topSyncDot');
+        const pillEl = document.getElementById('topSyncPill');
+        const warnEl = document.getElementById('firestoreRulesWarning');
+
+        textEl.textContent = msg;
+        if (connected) {
+          dotEl.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+          pillEl.className = "hidden sm:flex items-center space-x-1.5 text-xs text-emerald-400 bg-emerald-950/70 border border-emerald-800 px-2.5 py-1.5 rounded-lg";
+          warnEl.classList.add('hidden');
+        } else if (msg.toLowerCase().includes('permission denied')) {
+          dotEl.className = "w-2 h-2 rounded-full bg-red-500";
+          pillEl.className = "hidden sm:flex items-center space-x-1.5 text-xs text-red-300 bg-red-950/80 border border-red-800 px-2.5 py-1.5 rounded-lg";
+          warnEl.classList.remove('hidden');
+        } else {
+          dotEl.className = "w-2 h-2 rounded-full bg-amber-400";
+          pillEl.className = "hidden sm:flex items-center space-x-1.5 text-xs text-amber-300 bg-gray-950 border border-gray-800 px-2.5 py-1.5 rounded-lg";
+        }
+      });
+
+      window.HawassaFirestore.onStationsChange((updatedStations) => {
+        stations = updatedStations || [];
+        renderAdminPanel();
+        renderMobileRadar();
+        updateMobileTicket();
+      });
+
+      window.HawassaFirestore.onTicketsChange((tickets) => {
+        allTickets = tickets || [];
+        renderAdminQueueList();
+      });
+
+      window.HawassaFirestore.onBroadcastAlert(() => {
+        playDriverAlertSoundAndVoice();
+        showToast("🚨 10-Minute Warning Broadcasted by Station Coordinator!");
+      });
+
+      await window.HawassaFirestore.init();
+
+      const savedId = window.HawassaFirestore.getSavedTicketId();
+      if (savedId) {
+        window.HawassaFirestore.subscribeToTicket(savedId, onDriverTicketSnapshot);
       }
-      initSSE();
+
       renderAdminPanel();
       renderMobileRadar();
       updateMobileTicket();
-      updatePhoneClock();
-      setInterval(updatePhoneClock, 10000);
     });
   </script>
 </body>

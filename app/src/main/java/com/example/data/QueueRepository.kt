@@ -272,6 +272,49 @@ class QueueRepository {
         _currentTicket.value = ticket.copy(isTenMinAlertTriggered = true)
     }
 
+    fun setOnlineState(online: Boolean) {
+        _isOnline.value = online
+        if (online) {
+            _lastSyncTime.value = getCurrentFormattedTime()
+        }
+    }
+
+    fun updateStationsFromCloud(cloudStations: List<StationInfo>) {
+        if (cloudStations.isEmpty()) return
+        _stations.value = cloudStations
+        _lastSyncTime.value = getCurrentFormattedTime()
+        _isOnline.value = true
+
+        // Keep ticket status in sync with lane counter if listener hasn't updated it yet
+        val active = _currentTicket.value ?: return
+        val matchedStation = cloudStations.find { it.id == active.stationId } ?: return
+        val lane = matchedStation.lanes[active.vehicleCategory] ?: return
+        if (active.status == TicketStatus.WAITING && active.ticketNumber == lane.currentlyServingNumber) {
+            _currentTicket.value = active.copy(
+                status = TicketStatus.CALLED,
+                calledPumpNumber = active.calledPumpNumber ?: 1
+            )
+        } else if (active.status == TicketStatus.WAITING && active.ticketNumber < lane.currentlyServingNumber) {
+            _currentTicket.value = active.copy(status = TicketStatus.COMPLETED)
+        }
+    }
+
+    fun setActiveTicketFromCloud(ticket: QueueTicket?) {
+        val previous = _currentTicket.value
+        if (previous != null && (ticket == null || ticket.status == TicketStatus.CANCELLED || ticket.status == TicketStatus.COMPLETED)) {
+            activePlates.remove(previous.licensePlate)
+        }
+        if (ticket != null && (ticket.status == TicketStatus.WAITING || ticket.status == TicketStatus.CALLED || ticket.status == TicketStatus.SERVING)) {
+            activePlates[ticket.licensePlate] = ticket.id
+            _currentTicket.value = ticket.copy(
+                isTenMinAlertTriggered = previous?.takeIf { it.id == ticket.id }?.isTenMinAlertTriggered ?: ticket.isTenMinAlertTriggered
+            )
+        } else {
+            _currentTicket.value = ticket
+        }
+        _lastSyncTime.value = getCurrentFormattedTime()
+    }
+
     private fun getCurrentFormattedTime(): String {
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
         return sdf.format(Date())

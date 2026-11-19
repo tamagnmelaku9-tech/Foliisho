@@ -2,12 +2,12 @@
   "entities": {
     "Station": {
       "title": "Station",
-      "description": "Public Hawassa transit & fuel station real-time status",
+      "description": "Real-time Hawassa transit & fuel station state with per-category queue lanes",
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the station"
+          "description": "Unique identifier for the station (e.g. benzene_madya)"
         },
         "nameEn": {
           "type": "string",
@@ -17,36 +17,57 @@
           "type": "string",
           "description": "Amharic name of the station"
         },
-        "currentCategory": {
+        "neighborhoodEn": {
+          "type": "string",
+          "description": "English neighborhood or corridor"
+        },
+        "neighborhoodAm": {
+          "type": "string",
+          "description": "Amharic neighborhood or corridor"
+        },
+        "distanceKm": {
+          "type": "number",
+          "description": "Distance from city center in kilometers"
+        },
+        "activePermittedCategory": {
           "type": "string",
           "description": "Currently permitted vehicle category announced by station coordinator"
         },
-        "currentlyServing": {
-          "type": "integer",
-          "description": "Queue number currently being served at the station"
-        },
-        "totalQueued": {
-          "type": "integer",
-          "description": "Total count of vehicles queued at the station"
-        },
-        "benzeneAvailable": {
-          "type": "boolean",
-          "description": "Availability status of Benzene/Regular petrol"
-        },
-        "dieselAvailable": {
-          "type": "boolean",
-          "description": "Availability status of Diesel fuel"
-        },
-        "status": {
+        "benzeneStatus": {
           "type": "string",
-          "description": "Operating status of station: OPEN, PAUSED, CLOSED"
+          "description": "Benzene availability: AVAILABLE, LOW_STOCK, OUT_OF_STOCK"
+        },
+        "dieselStatus": {
+          "type": "string",
+          "description": "Diesel availability: AVAILABLE, LOW_STOCK, OUT_OF_STOCK"
+        },
+        "congestionLevel": {
+          "type": "string",
+          "description": "Station congestion level: LOW, MODERATE, HEAVY"
+        },
+        "isOpen": {
+          "type": "boolean",
+          "description": "Whether the station is currently open"
+        },
+        "lanes": {
+          "type": "object",
+          "description": "Map of vehicle category codes to lane metrics (currentlyServing, lastAssigned, avgDurationSeconds, isActive)"
         },
         "updatedAt": {
           "type": "string",
-          "description": "ISO timestamp of last station coordinator announcement"
+          "format": "date-time",
+          "description": "Server timestamp of last update (FieldValue.serverTimestamp())"
         }
       },
-      "required": ["id", "nameEn", "nameAm", "currentCategory", "currentlyServing", "benzeneAvailable", "dieselAvailable"]
+      "required": [
+        "id",
+        "nameEn",
+        "nameAm",
+        "activePermittedCategory",
+        "benzeneStatus",
+        "dieselStatus",
+        "lanes"
+      ]
     },
     "QueueTicket": {
       "title": "QueueTicket",
@@ -61,9 +82,17 @@
           "type": "string",
           "description": "Reference to the target station"
         },
+        "stationNameEn": {
+          "type": "string",
+          "description": "Station English display name"
+        },
+        "stationNameAm": {
+          "type": "string",
+          "description": "Station Amharic display name"
+        },
         "vehicleCategory": {
           "type": "string",
-          "description": "Vehicle category: BAJAJ, MINIBUS_TAXI, CITY_BUS, etc."
+          "description": "Vehicle category: BAJAJ, TAXI_MINIBUS, PUBLIC_BUS, CAR, MOTORCYCLE, TRUCK_HEAVY"
         },
         "driverName": {
           "type": "string",
@@ -79,22 +108,37 @@
         },
         "ticketNumber": {
           "type": "integer",
-          "description": "Sequential queue ticket number"
+          "description": "Sequential queue ticket number assigned atomically"
         },
         "status": {
           "type": "string",
-          "description": "Ticket status: WAITING, CALLED, SERVED, CANCELLED"
+          "description": "Ticket status: WAITING, CALLED, SERVING, COMPLETED, SKIPPED, CANCELLED"
         },
-        "userId": {
-          "type": "string",
-          "description": "Authenticated user id of the driver"
+        "calledPumpNumber": {
+          "type": "integer",
+          "description": "Assigned fuel pump bay number when called"
         },
         "createdAt": {
           "type": "string",
-          "description": "Timestamp when driver joined the queue"
+          "format": "date-time",
+          "description": "Server timestamp when ticket was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last status change"
         }
       },
-      "required": ["ticketId", "stationId", "vehicleCategory", "driverName", "phoneNumber", "licensePlate", "ticketNumber", "status"]
+      "required": [
+        "ticketId",
+        "stationId",
+        "vehicleCategory",
+        "driverName",
+        "phoneNumber",
+        "licensePlate",
+        "ticketNumber",
+        "status"
+      ]
     },
     "AiLog": {
       "title": "AiLog",
@@ -132,11 +176,11 @@
   "firestore": {
     "/stations/{stationId}": {
       "schema": { "$ref": "#/entities/Station" },
-      "description": "Real-time Hawassa station announcements, active categories, and fuel availability"
+      "description": "Real-time Hawassa station announcements, lane counters, and fuel availability"
     },
     "/tickets/{ticketId}": {
       "schema": { "$ref": "#/entities/QueueTicket" },
-      "description": "Queue tickets for drivers waiting at stations"
+      "description": "Live driver queue tickets synced between Driver apps and Coordinator dashboard"
     },
     "/ai_logs/{logId}": {
       "schema": { "$ref": "#/entities/AiLog" },

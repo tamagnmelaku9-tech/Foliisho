@@ -3,6 +3,7 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.FirestoreQueueSync
 import com.example.data.QueueRepository
 import com.example.engine.NotificationAlertEngine
 import com.example.model.Language
@@ -30,8 +31,8 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
 
     val repository = QueueRepository()
     private val alertEngine = NotificationAlertEngine(application.applicationContext)
-    private val cloudSync = com.example.data.HawassaCloudSync(repository, viewModelScope)
-    val isCloudConnected: StateFlow<Boolean> = cloudSync.isCloudConnected
+    private val firestoreSync = FirestoreQueueSync(application.applicationContext, repository, viewModelScope)
+    val isCloudConnected: StateFlow<Boolean> = firestoreSync.isCloudConnected
 
     private val _currentScreen = MutableStateFlow(AppScreen.STATION_RADAR)
     val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
@@ -45,6 +46,12 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
     // Join Queue Dialog State
     private val _joinDialogStation = MutableStateFlow<StationInfo?>(null)
     val joinDialogStation: StateFlow<StationInfo?> = _joinDialogStation.asStateFlow()
+
+    private val _isJoiningQueue = MutableStateFlow(false)
+    val isJoiningQueue: StateFlow<Boolean> = _isJoiningQueue.asStateFlow()
+
+    private val _joinDialogError = MutableStateFlow<String?>(null)
+    val joinDialogError: StateFlow<String?> = _joinDialogError.asStateFlow()
 
     private val _userMessage = MutableSharedFlow<String>()
     val userMessage: SharedFlow<String> = _userMessage.asSharedFlow()
@@ -69,24 +76,25 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
     val aiLastQuery: StateFlow<String> = _aiLastQuery.asStateFlow()
 
     init {
-        // Monitor ticket headway to auto-trigger 10-minute warning
+        // Monitor ticket headway or coordinator CALLED transition to auto-trigger 10-minute warning
         viewModelScope.launch {
             combine(repository.stations, repository.currentTicket) { stationList, ticket ->
-                if (ticket != null && ticket.status == TicketStatus.WAITING && !ticket.isTenMinAlertTriggered) {
+                if (ticket != null && !ticket.isTenMinAlertTriggered &&
+                    (ticket.status == TicketStatus.WAITING || ticket.status == TicketStatus.CALLED)
+                ) {
                     val station = stationList.find { it.id == ticket.stationId }
                     if (station != null) {
                         val lane = station.getLane(ticket.vehicleCategory)
                         val ahead = ticket.calculateVehiclesAhead(lane.currentlyServingNumber)
                         val waitMinutes = ticket.calculateWaitMinutes(lane.currentlyServingNumber, lane.avgDurationSeconds)
-                        // Trigger if 10 mins or fewer, or 3 or fewer vehicles ahead
-                        if (waitMinutes <= 10 || ahead <= 3) {
+                        if (ticket.status == TicketStatus.CALLED || waitMinutes <= 10 || ahead <= 3) {
                             repository.markTenMinuteAlertTriggered()
                             val stationName = if (_language.value == Language.AMHARIC) station.nameAm else station.nameEn
                             alertEngine.triggerTenMinuteAlert(
                                 stationName = stationName,
                                 ticketNumber = ticket.ticketNumber,
                                 vehiclesAhead = ahead,
-                                estimatedMinutes = maxOf(1, waitMinutes),
+                                estimatedMinutes = if (ticket.status == TicketStatus.CALLED) 0 else maxOf(1, waitMinutes),
                                 language = _language.value
                             )
                         }
@@ -95,8 +103,25 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
             }.stateIn(viewModelScope, SharingStarted.Eagerly, Unit)
         }
 
-        // Start real-time cloud sync with Hawassa backend server
-        cloudSync.startRealtimeSync()
+        // Start real-time Cloud Firestore listener (stations + saved ticket + coordinator alert broadcasts)
+        firestoreSync.startRealtimeSync { broadcastStationId, _ ->
+            val active = repository.currentTicket.value
+            val station = repository.stations.value.find { it.id == broadcastStationId }
+            if (active == null || active.stationId == broadcastStationId) {
+                val stationLabel = if (_language.value == Language.AMHARIC) {
+                    station?.nameAm ?: "ቤንዚን ማድያ"
+                } else {
+                    station?.nameEn ?: "Hawassa Station"
+                }
+                alertEngine.triggerTenMinuteAlert(
+                    stationName = stationLabel,
+                    ticketNumber = active?.ticketNumber ?: 1,
+                    vehiclesAhead = 2,
+                    estimatedMinutes = 10,
+                    language = _language.value
+                )
+            }
+        }
     }
 
     fun setScreen(screen: AppScreen) {
@@ -112,11 +137,15 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun openJoinDialog(station: StationInfo) {
+        _joinDialogError.value = null
         _joinDialogStation.value = station
     }
 
     fun closeJoinDialog() {
-        _joinDialogStation.value = null
+        if (!_isJoiningQueue.value) {
+            _joinDialogError.value = null
+            _joinDialogStation.value = null
+        }
     }
 
     fun submitJoinQueue(
@@ -125,27 +154,33 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
         phone: String,
         plate: String
     ) {
-        val result = repository.joinQueue(
-            stationId = stationId,
-            driverName = driverName,
-            driverPhone = phone,
-            licensePlate = plate
-        )
+        if (_isJoiningQueue.value) return
+        _isJoiningQueue.value = true
+        _joinDialogError.value = null
 
-        result.onSuccess { ticket ->
-            _joinDialogStation.value = null
-            _currentScreen.value = AppScreen.MY_QUEUE_TICKET
-            viewModelScope.launch {
+        viewModelScope.launch {
+            val result = firestoreSync.joinQueue(
+                stationId = stationId,
+                driverName = driverName,
+                driverPhone = phone,
+                licensePlate = plate
+            )
+            _isJoiningQueue.value = false
+
+            result.onSuccess { ticket ->
+                _joinDialogStation.value = null
+                _joinDialogError.value = null
+                _currentScreen.value = AppScreen.MY_QUEUE_TICKET
                 val msg = if (_language.value == Language.AMHARIC) {
                     "የተራ ቁጥርዎ #${ticket.ticketNumber} (${ticket.vehicleCategory.shortLabel}) ተመዝግቧል!"
                 } else {
-                    "Queue ticket #${ticket.ticketNumber} (${ticket.vehicleCategory.name}) registered successfully!"
+                    "Queue ticket #${ticket.ticketNumber} (${ticket.vehicleCategory.name}) booked live!"
                 }
                 _userMessage.emit(msg)
-            }
-        }.onFailure { err ->
-            viewModelScope.launch {
-                _userMessage.emit(err.message ?: "Failed to join queue")
+            }.onFailure { err ->
+                val errText = err.message ?: "Failed to book queue slot"
+                _joinDialogError.value = errText
+                _userMessage.emit(errText)
             }
         }
     }
@@ -157,36 +192,43 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
         phone: String,
         plate: String
     ) {
-        val result = repository.joinQueue(
-            stationId = stationId,
-            vehicleCategory = category,
-            driverName = driverName,
-            driverPhone = phone,
-            licensePlate = plate
-        )
+        if (_isJoiningQueue.value) return
+        _isJoiningQueue.value = true
+        _joinDialogError.value = null
 
-        result.onSuccess { ticket ->
-            _joinDialogStation.value = null
-            _currentScreen.value = AppScreen.MY_QUEUE_TICKET
-            viewModelScope.launch {
+        viewModelScope.launch {
+            val result = firestoreSync.joinQueue(
+                stationId = stationId,
+                driverName = driverName,
+                driverPhone = phone,
+                licensePlate = plate,
+                explicitCategory = category
+            )
+            _isJoiningQueue.value = false
+
+            result.onSuccess { ticket ->
+                _joinDialogStation.value = null
+                _joinDialogError.value = null
+                _currentScreen.value = AppScreen.MY_QUEUE_TICKET
                 val msg = if (_language.value == Language.AMHARIC) {
                     "የተራ ቁጥርዎ #${ticket.ticketNumber} ተመዝግቧል!"
                 } else {
-                    "Queue ticket #${ticket.ticketNumber} registered successfully!"
+                    "Queue ticket #${ticket.ticketNumber} booked live!"
                 }
                 _userMessage.emit(msg)
-            }
-        }.onFailure { err ->
-            viewModelScope.launch {
-                _userMessage.emit(err.message ?: "Failed to join queue")
+            }.onFailure { err ->
+                val errText = err.message ?: "Failed to book queue slot"
+                _joinDialogError.value = errText
+                _userMessage.emit(errText)
             }
         }
     }
 
     fun leaveQueue() {
-        repository.leaveQueue()
+        val activeTicketId = repository.currentTicket.value?.id
         _currentScreen.value = AppScreen.STATION_RADAR
         viewModelScope.launch {
+            firestoreSync.leaveQueue(activeTicketId)
             val msg = if (_language.value == Language.AMHARIC) {
                 "ከተራው በተሳካ ሁኔታ ወጥተዋል"
             } else {
@@ -261,6 +303,7 @@ class TransitViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        firestoreSync.stopSync()
         alertEngine.shutdown()
     }
 }
