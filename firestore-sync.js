@@ -257,6 +257,11 @@
           firebase.initializeApp(FIREBASE_CONFIG);
         }
         this.db = firebase.firestore();
+        try {
+          await this.db.enablePersistence({ synchronizeTabs: true });
+        } catch (persistErr) {
+          // Ignore failed-precondition (multi-tab without sync) or unimplemented (private browsing)
+        }
       } catch (err) {
         console.error("Firestore init error:", err);
         this._emitStatus(false, "Firestore Init Error: " + (err.message || err));

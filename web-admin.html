@@ -4,10 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hawassa Transit & Fuel Queue - Station Coordinator Web Admin</title>
+  <meta name="theme-color" content="#030712">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HawassaAdmin">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/admin-manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="/firestore-sync.js"></script>
+  <script src="/pwa-install.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
@@ -33,12 +42,17 @@
         </div>
       </div>
 
-      <div class="flex items-center space-x-3">
+      <div class="flex flex-wrap items-center gap-2.5">
         <!-- Live Cloud Firestore Status Indicator -->
         <div id="apiStatusPill" class="flex items-center space-x-2 text-xs text-amber-300 bg-gray-950 border border-gray-800 px-3 py-1.5 rounded-lg">
           <span class="w-2.5 h-2.5 rounded-full bg-amber-400" id="apiStatusDot"></span>
           <span class="font-mono" id="apiStatusText">Connecting to Firestore (foliisho)...</span>
         </div>
+
+        <!-- Install Admin PWA Button -->
+        <button data-pwa-install-btn onclick="window.HawassaPWA && window.HawassaPWA.triggerInstall()" class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow transition">
+          📲 Install App
+        </button>
 
         <!-- Quick Nav Links -->
         <a href="/driver" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-lg border border-gray-700 text-sky-400 transition">
@@ -320,6 +334,32 @@
   <footer class="border-t border-gray-900 py-4 text-center text-xs text-gray-500">
     Hawassa Transit &amp; Fuel Queue Management Platform • Cloud Firestore Live Coordinator Dashboard
   </footer>
+
+  <!-- PWA Install Instructions Modal -->
+  <div id="pwaHelpModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="bg-gray-900 border border-gray-700 rounded-3xl p-6 space-y-4 max-w-md w-full shadow-2xl">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <img src="/icons/icon-192.png" alt="Hawassa Admin Icon" class="w-8 h-8 rounded-lg">
+          <h3 class="text-sm font-extrabold text-white">Install Coordinator Admin App (PWA)</h3>
+        </div>
+        <button onclick="document.getElementById('pwaHelpModal').classList.add('hidden')" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="space-y-3 text-xs text-gray-300 leading-relaxed">
+        <div class="p-3 rounded-xl bg-gray-950 border border-gray-800">
+          <div class="font-bold text-emerald-400 mb-1">Desktop (Chrome / Edge):</div>
+          <p>Click the <strong class="text-white">Install icon (⊕)</strong> in the browser address bar or open browser menu <strong class="text-white">(⋮) → Save &amp; Share / Install</strong>.</p>
+        </div>
+        <div class="p-3 rounded-xl bg-gray-950 border border-gray-800">
+          <div class="font-bold text-amber-400 mb-1">Android / iPhone Tablet:</div>
+          <p>Android Chrome: tap <strong class="text-white">(⋮) → Install app</strong>. iPhone/iPad Safari: tap <strong class="text-white">Share (⬆️) → Add to Home Screen</strong>.</p>
+        </div>
+      </div>
+      <button onclick="document.getElementById('pwaHelpModal').classList.add('hidden')" class="w-full py-2.5 bg-amber-500 text-gray-950 font-black text-xs rounded-xl">
+        Got It
+      </button>
+    </div>
+  </div>
 
   <script>
     let currentStation = (function() {

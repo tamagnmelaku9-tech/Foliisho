@@ -4,10 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Hawassa Transit Driver - Mobile Web App</title>
+  <meta name="theme-color" content="#030712">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HawassaDriver">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/driver-manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="/firestore-sync.js"></script>
+  <script src="/pwa-install.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
@@ -38,9 +47,14 @@
       </div>
     </div>
 
-    <div class="flex items-center space-x-2">
+    <div class="flex items-center space-x-1.5">
+      <!-- PWA Install Button -->
+      <button data-pwa-install-btn onclick="window.HawassaPWA && window.HawassaPWA.triggerInstall()" class="hidden px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shadow transition">
+        📲 Install
+      </button>
+
       <!-- Language Toggle -->
-      <button onclick="toggleLang()" class="px-2.5 py-1 bg-gray-800 text-amber-400 border border-gray-700 text-xs font-bold rounded-lg transition">
+      <button onclick="toggleLang()" class="px-2 py-1 bg-gray-800 text-amber-400 border border-gray-700 text-[11px] font-bold rounded-lg transition">
         <span id="langBtnText">English</span>
       </button>
 
@@ -64,6 +78,20 @@
 
   <!-- TAB 1: STATIONS RADAR -->
   <main id="tabRadarScreen" class="flex-1 p-3 space-y-3 overflow-y-auto">
+    <!-- Install App Banner (hidden automatically when installed as standalone PWA) -->
+    <div data-pwa-install-banner class="hidden bg-emerald-950/70 border border-emerald-700/60 rounded-2xl p-3 flex items-center justify-between gap-2">
+      <div class="flex items-center space-x-2.5 min-w-0">
+        <img src="/icons/icon-192.png" alt="App Icon" class="w-9 h-9 rounded-xl shrink-0 border border-emerald-500/40">
+        <div class="min-w-0">
+          <div class="text-xs font-extrabold text-white truncate">Install Hawassa Driver App</div>
+          <div class="text-[10px] text-emerald-300">አፕሊኬሽኑን ስልክዎ ላይ ይጫኑ (ያለ APK)</div>
+        </div>
+      </div>
+      <button onclick="window.HawassaPWA && window.HawassaPWA.triggerInstall()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-[11px] rounded-xl shrink-0 transition">
+        Install
+      </button>
+    </div>
+
     <!-- Coordinator Permitted Category Banner -->
     <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start space-x-2.5">
       <span class="text-xl">📢</span>
@@ -178,6 +206,32 @@
     </div>
   </div>
 
+  <!-- PWA Install Instructions Modal (Fallback for iOS Safari / browsers suppressing prompt) -->
+  <div id="pwaHelpModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="bg-gray-900 border border-gray-700 rounded-3xl p-5 space-y-3 max-w-sm w-full shadow-2xl">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <img src="/icons/icon-192.png" alt="Hawassa Driver Icon" class="w-7 h-7 rounded-lg">
+          <h3 class="text-sm font-extrabold text-white">Install as Phone App (PWA)</h3>
+        </div>
+        <button onclick="document.getElementById('pwaHelpModal').classList.add('hidden')" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="space-y-2.5 text-xs text-gray-300 leading-relaxed">
+        <div class="p-3 rounded-xl bg-gray-950 border border-gray-800">
+          <div class="font-bold text-emerald-400 mb-1">Android (Chrome / Edge / Samsung):</div>
+          <p>Tap browser menu <strong class="text-white">(⋮)</strong> at top-right → tap <strong class="text-white">"Install app"</strong> or <strong class="text-white">"Add to Home screen"</strong>.</p>
+        </div>
+        <div class="p-3 rounded-xl bg-gray-950 border border-gray-800">
+          <div class="font-bold text-sky-400 mb-1">iPhone / iPad (Safari):</div>
+          <p>Tap the <strong class="text-white">Share (⬆️)</strong> button at bottom of Safari → scroll down and tap <strong class="text-white">"Add to Home Screen"</strong>.</p>
+        </div>
+      </div>
+      <button onclick="document.getElementById('pwaHelpModal').classList.add('hidden')" class="w-full py-2.5 bg-amber-500 text-gray-950 font-black text-xs rounded-xl">
+        Got It (እሺ)
+      </button>
+    </div>
+  </div>
+
   <script>
     let isAmharic = true;
     let selectedStationId = "benzene_madya";
@@ -285,6 +339,10 @@
       errBox.classList.add('hidden');
       btn.disabled = true;
       btn.textContent = isAmharic ? 'በመመዝገብ ላይ...' : 'Saving to Firestore...';
+
+      if (window.HawassaPWA) {
+        window.HawassaPWA.requestNotificationPermission();
+      }
 
       try {
         const st = stations.find(s => s.id === selectedStationId);
@@ -431,6 +489,11 @@
           window.speechSynthesis.speak(ut);
         }
       }, 500);
+
+      const alertMsg = isAmharic ? "🚨 ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!" : "🚨 Your turn will arrive in 10 minutes; please come to the station!";
+      if (window.HawassaPWA) {
+        window.HawassaPWA.notifyTurnAlert("Hawassa Transit Queue", alertMsg, "/driver");
+      }
 
       toast(isAmharic ? "🚨 ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት!" : "🚨 10-Minute Warning!");
     }
