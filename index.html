@@ -703,6 +703,8 @@
         : stationTickets.filter(t => t.vehicleCategory === currentCat);
 
       document.getElementById('adminLiveQueueCount').textContent = filtered.length;
+      const allBtn = document.getElementById('dualFilterAll');
+      if (allBtn) allBtn.textContent = `All Lanes (${stationTickets.length})`;
 
       if (filtered.length === 0) {
         container.innerHTML = `<div class="text-center py-4 text-[11px] text-gray-500">No active bookings in ${escapeHtml(adminQueueFilter === 'ALL' ? 'this station' : currentCat)} yet.</div>`;

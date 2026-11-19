@@ -571,6 +571,8 @@
         : stationTickets.filter(t => t.vehicleCategory === currentCategory);
 
       document.getElementById('liveQueueCountBadge').textContent = filtered.length;
+      const allBtn = document.getElementById('filterBtnAll');
+      if (allBtn) allBtn.textContent = `All Lanes (${stationTickets.length})`;
 
       if (filtered.length === 0) {
         container.innerHTML = `

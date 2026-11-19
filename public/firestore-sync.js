@@ -273,9 +273,9 @@
 
       this._emitStatus(false, "Syncing Cloud Firestore (foliisho)...");
 
-      // 1. Seed any missing default stations
+      // 1. Seed any missing default stations ONLY after verifying against server
       try {
-        const snap = await this.db.collection("stations").get();
+        const snap = await this.db.collection("stations").get({ source: 'server' });
         const existingIds = new Set();
         snap.forEach((d) => existingIds.add(d.id));
         const missing = DEFAULT_STATIONS.filter((st) => !existingIds.has(st.id));
