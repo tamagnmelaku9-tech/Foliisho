@@ -258,7 +258,10 @@
         }
         this.db = firebase.firestore();
         try {
-          await this.db.enablePersistence({ synchronizeTabs: true });
+          await Promise.race([
+            this.db.enablePersistence({ synchronizeTabs: true }),
+            new Promise((resolve) => setTimeout(resolve, 1000))
+          ]);
         } catch (persistErr) {
           // Ignore failed-precondition (multi-tab without sync) or unimplemented (private browsing)
         }

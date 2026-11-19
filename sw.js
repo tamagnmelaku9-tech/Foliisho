@@ -4,7 +4,7 @@
  * Cloud Firestore / Firebase endpoints so real-time streams remain unaffected.
  */
 
-const CACHE_NAME = 'hawassa-pwa-v1';
+const CACHE_NAME = 'hawassa-pwa-v2';
 const APP_SHELL = [
   '/',
   '/driver',

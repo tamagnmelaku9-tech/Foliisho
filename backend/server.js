@@ -12,7 +12,18 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Serve static assets from project root
+// Serve PWA headers cleanly and serve static assets from /public and project root
+app.use((req, res, next) => {
+  if (req.path === '/sw.js') {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Service-Worker-Allowed', '/');
+  } else if (req.path.endsWith('manifest.json')) {
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(express.static(path.join(__dirname, '..')));
 
 // In-Memory & File-Backed Persistent Database
@@ -395,9 +406,11 @@ app.get('/', (req, res) => {
 });
 
 // Server Initialization - Port 3000 connects directly to AI Studio web preview & Nginx bridge
-const PORT = (process.env.APP_PORT || (process.env.PORT && process.env.PORT !== '8080' ? process.env.PORT : 3000));
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Hawassa Transit Queue REST API & SSE Server running on port ${PORT}`);
-});
+if (!process.env.VERCEL) {
+  const PORT = (process.env.APP_PORT || (process.env.PORT && process.env.PORT !== '8080' ? process.env.PORT : 3000));
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Hawassa Transit Queue REST API & SSE Server running on port ${PORT}`);
+  });
+}
 
 module.exports = app;

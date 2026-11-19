@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hawassa Transit Driver - Mobile Web App</title>
+  <meta name="theme-color" content="#0B1120">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HawassaDriver">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/driver-manifest.json">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="/firestore-sync.js"></script>
+  <script src="/pwa-install.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Roboto', 'Noto Sans Ethiopic', sans-serif; }
+    .amber-gradient { background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); }
+    @keyframes alertPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.9; }
+    }
+    .animate-alert-pulse {
+      animation: alertPulse 1.2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col max-w-md mx-auto shadow-2xl border-x border-gray-900">
+
+  <!-- Mobile Top Bar -->
+  <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-40 flex items-center justify-between">
+    <div class="flex items-center space-x-2.5">
+      <img src="/icons/icon-192.png" alt="Hawassa Driver Logo" class="w-9 h-9 rounded-xl shadow border border-amber-500/40 object-cover shrink-0">
+      <div>
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-xs font-black text-white">Hawassa Driver Radar</h1>
+          <span id="liveCloudDot" class="w-2 h-2 rounded-full bg-amber-400" title="Firestore Sync Status"></span>
+        </div>
+        <p class="text-[10px] text-gray-400" id="cloudSyncSubtitle">Connecting to Firestore...</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-1.5">
+      <!-- PWA Install Button -->
+      <button data-pwa-install-btn onclick="window.HawassaPWA && window.HawassaPWA.triggerInstall()" class="hidden px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shadow transition">
+        📲 Install
+      </button>
+
+      <!-- Language Toggle -->
+      <button onclick="toggleLang()" class="px-2 py-1 bg-gray-800 text-amber-400 border border-gray-700 text-[11px] font-bold rounded-lg transition">
+        <span id="langBtnText">English</span>
+      </button>
+
+      <!-- View Switcher -->
+      <div class="flex items-center bg-gray-950 p-0.5 rounded-lg border border-gray-800">
+        <button id="btnTabRadar" onclick="switchTab('radar')" class="px-2 py-1 text-[11px] font-bold rounded bg-amber-500 text-gray-950">
+          Stations
+        </button>
+        <button id="btnTabTicket" onclick="switchTab('ticket')" class="px-2 py-1 text-[11px] font-bold rounded text-gray-400">
+          Ticket
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast -->
+  <div id="toastBox" class="fixed top-16 left-4 right-4 max-w-md mx-auto z-50 hidden bg-gray-900 border border-amber-500 text-white text-xs p-3 rounded-xl shadow-2xl flex items-center space-x-2">
+    <span class="text-amber-400 text-base">📢</span>
+    <span id="toastMsg">Alert</span>
+  </div>
+
+  <!-- TAB 1: STATIONS RADAR -->
+  <main id="tabRadarScreen" class="flex-1 p-3 space-y-3 overflow-y-auto">
+    <!-- Install App Banner (hidden automatically when installed as standalone PWA) -->
+    <div data-pwa-install-banner class="hidden bg-emerald-950/70 border border-emerald-700/60 rounded-2xl p-3 flex items-center justify-between gap-2">
+      <div class="flex items-center space-x-2.5 min-w-0">
+        <img src="/icons/icon-192.png" alt="App Icon" class="w-9 h-9 rounded-xl shrink-0 border border-emerald-500/40">
+        <div class="min-w-0">
+          <div class="text-xs font-extrabold text-white truncate">Install Hawassa Driver App</div>
+          <div class="text-[10px] text-emerald-300">አፕሊኬሽኑን ስልክዎ ላይ ይጫኑ (ያለ APK)</div>
+        </div>
+      </div>
+      <button onclick="window.HawassaPWA && window.HawassaPWA.triggerInstall()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-[11px] rounded-xl shrink-0 transition">
+        Install
+      </button>
+    </div>
+
+    <!-- Coordinator Permitted Category Banner -->
+    <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start space-x-2.5">
+      <span class="text-xl">📢</span>
+      <div>
+        <h2 class="text-xs font-black text-amber-400 uppercase tracking-wide">Coordinator Announcement</h2>
+        <p class="text-xs text-white mt-0.5 font-bold" id="announcementText">አሁን የተፈቀደው: BAJAJ በቤንዚን ማድያ</p>
+        <p class="text-[10px] text-gray-400 mt-0.5">Live synced from Cloud Firestore (project: foliisho).</p>
+      </div>
+    </div>
+
+    <!-- Stations List -->
+    <div id="driverStationsContainer" class="space-y-2.5">
+      <!-- Injected by script -->
+    </div>
+  </main>
+
+  <!-- TAB 2: MY QUEUE TICKET -->
+  <main id="tabTicketScreen" class="hidden flex-1 p-4 flex flex-col justify-between">
+    <!-- Empty Ticket Placeholder -->
+    <div id="noTicketCard" class="hidden flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3">
+      <div class="text-4xl">🎫</div>
+      <h3 class="text-sm font-bold text-white" id="noTicketTitle">No Active Queue Ticket</h3>
+      <p class="text-xs text-gray-400" id="noTicketSubtitle">Select a Hawassa station on the Stations tab and tap Join Queue to reserve your slot.</p>
+      <button onclick="switchTab('radar')" class="px-4 py-2 bg-amber-500 text-gray-950 font-bold text-xs rounded-xl">
+        Browse Stations
+      </button>
+    </div>
+
+    <!-- Active Ticket Details -->
+    <div id="activeTicketSection" class="space-y-4">
+      <!-- 10-Minute Warning Alert Box -->
+      <div id="alertBox" class="hidden bg-red-600/20 border-2 border-red-500 rounded-2xl p-3.5 animate-alert-pulse">
+        <div class="flex items-center space-x-2.5">
+          <span class="text-2xl">🚨</span>
+          <div>
+            <h3 class="text-xs font-black text-red-400 uppercase tracking-wider" id="alertHeading">10-Minute Turn Alert!</h3>
+            <p class="text-xs text-white font-extrabold mt-0.5" id="alertVoiceText">ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Ticket Card -->
+      <div class="bg-gray-900 border border-gray-800 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
+        <div class="text-[11px] font-bold text-amber-400 uppercase tracking-widest" id="ticketStationName">Benzene Madya Central</div>
+        <div class="text-5xl font-black text-white font-mono my-3" id="ticketTokenDisplay">#--</div>
+
+        <div class="flex flex-wrap items-center justify-center gap-2 text-xs">
+          <span class="bg-gray-800 text-gray-300 px-2.5 py-1 rounded font-mono" id="ticketPlateDisplay">AA-2-84920</span>
+          <span class="bg-gray-800 text-amber-300 px-2.5 py-1 rounded font-bold" id="ticketCatDisplay">BAJAJ</span>
+          <span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded font-bold" id="ticketStatusDisplay">WAITING</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-gray-800">
+          <div class="bg-gray-950 rounded-2xl p-3">
+            <span class="text-[10px] text-gray-400 block">Vehicles Ahead</span>
+            <span class="text-2xl font-black text-amber-400 font-mono" id="ticketAheadDisplay">0</span>
+            <span class="text-[9px] text-gray-500">የሚቀድሙ ተሽከርካሪዎች</span>
+          </div>
+          <div class="bg-gray-950 rounded-2xl p-3">
+            <span class="text-[10px] text-gray-400 block">Wait Time</span>
+            <span class="text-2xl font-black text-sky-400 font-mono" id="ticketWaitDisplay">~1 min</span>
+            <span class="text-[9px] text-gray-500">የሚገመት የጥበቃ ጊዜ</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Audio Alert Button -->
+      <button onclick="playDriverAlert()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-95 text-gray-950 font-black text-xs rounded-2xl shadow-xl flex items-center justify-center gap-2 transition">
+        <span class="text-base">🔊</span>
+        <span>Test 10-Min Siren &amp; Voice Cue</span>
+      </button>
+    </div>
+
+    <!-- Leave Queue -->
+    <button id="btnLeaveQueue" onclick="leaveQueue()" class="hidden w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-red-400 font-semibold text-xs rounded-2xl border border-gray-800 transition mt-4">
+      Leave Queue (ከተራ ውጣ)
+    </button>
+  </main>
+
+  <!-- Join Modal -->
+  <div id="joinModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex flex-col justify-end">
+    <div class="bg-gray-900 border border-gray-700 rounded-3xl p-5 space-y-3 max-w-md mx-auto w-full shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-extrabold text-white" id="modalTitle">Join Queue</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[10px] text-amber-300" id="modalCategoryBanner">
+        ℹ️ Permitted Lane: <strong id="modalPermittedCatLabel">BAJAJ</strong> (set by Coordinator)
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-gray-300 mb-1">Driver Name (የአሽከርካሪ ስም - አማራጭ)</label>
+        <input type="text" id="inputDriverName" placeholder="e.g. Abebe" class="w-full bg-gray-950 border border-gray-700 text-white rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-gray-300 mb-1">Driver Phone Number (የስልክ ቁጥር)</label>
+        <input type="tel" id="inputPhone" value="0916123456" class="w-full bg-gray-950 border border-gray-700 text-white font-mono rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold text-gray-300 mb-1">Ethiopian License Plate (የሰሌዳ ቁጥር)</label>
+        <input type="text" id="inputPlate" value="AA-2-84920" class="w-full bg-gray-950 border border-gray-700 text-amber-400 uppercase font-mono font-bold rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+      </div>
+
+      <div id="joinErrorBox" class="hidden p-2.5 bg-red-950/90 border border-red-700 rounded-xl text-[11px] text-red-200"></div>
+
+      <button id="btnConfirmJoin" onclick="confirmJoin()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs rounded-xl shadow-lg transition">
+        Confirm &amp; Take Ticket (ተራ ያዝ)
+      </button>
+    </div>
+  </div>
+
+  <!-- PWA Install Instructions Modal (Fallback for iOS Safari / browsers suppressing prompt) -->
+  <div id="pwaHelpModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center">
+    <div class="bg-gray-900 border border-gray-700 rounded-3xl p-5 space-y-3 max-w-sm w-full shadow-2xl">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <img src="/icons/icon-192.png" alt="Hawassa Driver Icon" class="w-7 h-7 rounded-lg">
+          <h3 class="text-sm font-extrabold text-white">Install as Phone App (PWA)</h3>
+        </div>
+        <button onclick="document.getElementById('pwaHelpModal').classList.add('hidden')" class="text-gray-400 hover:text-white text-lg">✕</button>
+      </div>
+      <div class="space-y-2.5 text-xs text-gray-300 leading-relaxed">
+        <div class="p-3 rounded-xl bg-gray-950 border border-gray-800">
+          <div class="font-bold text-emerald-400 mb-1">Android (Chrome / Edge / Samsung):</div>
+          <p>Tap browser menu <strong class="text-white">(⋮)</strong> at top-right → tap <strong class="text-white">"Install app"</strong> or <strong class="text-white">"Add to Home screen"</strong>.</p>
+        </div>
+        <div class="p-3 rounded-xl bg-gray-950 border border-gray-800">
+          <div class="font-bold text-sky-400 mb-1">iPhone / iPad (Safari):</div>
+          <p>Tap the <strong class="text-white">Share (⬆️)</strong> button at bottom of Safari → scroll down and tap <strong class="text-white">"Add to Home Screen"</strong>.</p>
+        </div>
+      </div>
+      <button onclick="document.getElementById('pwaHelpModal').classList.add('hidden')" class="w-full py-2.5 bg-amber-500 text-gray-950 font-black text-xs rounded-xl">
+        Got It (እሺ)
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let isAmharic = true;
+    let selectedStationId = "benzene_madya";
+    let activeTicket = null;
+    let stations = [];
+    let hasAutoAlerted = false;
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function toggleLang() {
+      isAmharic = !isAmharic;
+      document.getElementById('langBtnText').textContent = isAmharic ? 'English' : 'አማርኛ';
+      renderRadar();
+      renderTicket();
+    }
+
+    function switchTab(tab) {
+      if (tab === 'radar') {
+        document.getElementById('tabRadarScreen').classList.remove('hidden');
+        document.getElementById('tabTicketScreen').classList.add('hidden');
+        document.getElementById('btnTabRadar').className = "px-2 py-1 text-[11px] font-bold rounded bg-amber-500 text-gray-950";
+        document.getElementById('btnTabTicket').className = "px-2 py-1 text-[11px] font-bold rounded text-gray-400";
+      } else {
+        document.getElementById('tabRadarScreen').classList.add('hidden');
+        document.getElementById('tabTicketScreen').classList.remove('hidden');
+        document.getElementById('btnTabRadar').className = "px-2 py-1 text-[11px] font-bold rounded text-gray-400";
+        document.getElementById('btnTabTicket').className = "px-2 py-1 text-[11px] font-bold rounded bg-amber-500 text-gray-950";
+        renderTicket();
+      }
+    }
+
+    function renderRadar() {
+      const container = document.getElementById('driverStationsContainer');
+      container.innerHTML = '';
+      stations.forEach(st => {
+        const cat = st.activePermittedCategory || "BAJAJ";
+        const lane = (st.lanes && st.lanes[cat]) ? st.lanes[cat] : { currentlyServing: 0, lastAssigned: 0, isActive: true };
+        const isPaused = lane.isActive === false;
+        const congestion = st.congestionLevel || "MODERATE";
+
+        const card = document.createElement('div');
+        card.className = "bg-gray-900 border border-gray-800 rounded-2xl p-3 space-y-2";
+        card.innerHTML = `
+          <div class="flex items-start justify-between">
+            <div>
+              <h3 class="text-xs font-bold text-white">${escapeHtml(isAmharic ? st.nameAm : st.nameEn)}</h3>
+              <p class="text-[10px] text-gray-400">${escapeHtml(isAmharic ? st.neighborhoodAm : st.neighborhoodEn)} • ${escapeHtml(st.distanceKm)} km</p>
+            </div>
+            <span class="text-[9px] font-mono px-2 py-0.5 rounded ${congestion === 'LOW' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}">${escapeHtml(congestion)}</span>
+          </div>
+          <div class="bg-gray-950 border border-gray-800/80 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[10px]">
+            <span class="text-amber-400 font-bold">${isAmharic ? 'የተፈቀደው: ' : 'Permitted: '} ${escapeHtml(cat)}</span>
+            <span class="text-gray-400 font-mono">#${escapeHtml(lane.currentlyServing)} / #${escapeHtml(lane.lastAssigned)}</span>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <div class="text-[9px] font-bold space-x-1">
+              <span class="${st.benzeneStatus === 'AVAILABLE' ? 'text-emerald-400' : 'text-red-400'}">⛽ Benzene</span>
+              <span class="text-gray-600">•</span>
+              <span class="${st.dieselStatus === 'AVAILABLE' ? 'text-emerald-400' : 'text-amber-400'}">🛢️ Diesel</span>
+            </div>
+            <button onclick="openModal('${escapeHtml(st.id)}')" ${isPaused ? 'disabled' : ''} class="px-3 py-1.5 ${isPaused ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-400 text-gray-950'} font-bold text-[10px] rounded-lg transition">
+              ${isPaused ? (isAmharic ? 'ቆሟል' : 'Paused') : (isAmharic ? 'ተራ ያዝ' : 'Join Queue')}
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      if (stations.length > 0) {
+        const bst = stations[0];
+        document.getElementById('announcementText').textContent = isAmharic
+          ? `አሁን የተፈቀደው: ${bst.activePermittedCategory} በ${bst.nameAm}`
+          : `Now Serving: ${bst.activePermittedCategory} at ${bst.nameEn}`;
+      }
+    }
+
+    function openModal(id) {
+      selectedStationId = id;
+      const st = stations.find(s => s.id === id);
+      if (!st) return;
+      document.getElementById('modalTitle').textContent = isAmharic ? `${st.nameAm} ተራ መያዣ` : `Join ${st.nameEn}`;
+      document.getElementById('modalPermittedCatLabel').textContent = st.activePermittedCategory || 'BAJAJ';
+      document.getElementById('joinErrorBox').classList.add('hidden');
+      document.getElementById('joinModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('joinModal').classList.add('hidden');
+    }
+
+    async function confirmJoin() {
+      const name = document.getElementById('inputDriverName').value.trim();
+      const phone = document.getElementById('inputPhone').value.trim();
+      const plate = document.getElementById('inputPlate').value.trim().toUpperCase();
+      const errBox = document.getElementById('joinErrorBox');
+      const btn = document.getElementById('btnConfirmJoin');
+
+      errBox.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = isAmharic ? 'በመመዝገብ ላይ...' : 'Saving to Firestore...';
+
+      if (window.HawassaPWA) {
+        window.HawassaPWA.requestNotificationPermission();
+      }
+
+      try {
+        const st = stations.find(s => s.id === selectedStationId);
+        const ticket = await window.HawassaFirestore.joinQueue({
+          stationId: selectedStationId,
+          driverPhone: phone,
+          licensePlate: plate,
+          driverName: name || 'Driver',
+          vehicleCategory: st ? st.activePermittedCategory : undefined
+        });
+
+        activeTicket = ticket;
+        hasAutoAlerted = false;
+        window.HawassaFirestore.subscribeToTicket(ticket.ticketId, onTicketSnapshot);
+
+        closeModal();
+        switchTab('ticket');
+        toast(`✓ Ticket #${ticket.ticketNumber} booked live!`);
+      } catch (err) {
+        errBox.textContent = err.message || 'Failed to book ticket. Check connection and try again.';
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirm & Take Ticket (ተራ ያዝ)';
+      }
+    }
+
+    function onTicketSnapshot(ticket) {
+      if (!ticket) {
+        activeTicket = null;
+        window.HawassaFirestore.clearSavedTicketId();
+        renderTicket();
+        return;
+      }
+      const prevStatus = activeTicket ? activeTicket.status : null;
+      activeTicket = ticket;
+      renderTicket();
+      if (ticket.status === 'CALLED' && prevStatus !== 'CALLED') {
+        playDriverAlert();
+      }
+    }
+
+    async function leaveQueue() {
+      if (!activeTicket) return;
+      try {
+        await window.HawassaFirestore.leaveQueue(activeTicket.ticketId);
+        activeTicket = null;
+        switchTab('radar');
+        toast("Left queue & updated station list");
+      } catch (err) {
+        toast("Error leaving queue: " + (err.message || err));
+      }
+    }
+
+    function renderTicket() {
+      const noTicketCard = document.getElementById('noTicketCard');
+      const activeSection = document.getElementById('activeTicketSection');
+      const leaveBtn = document.getElementById('btnLeaveQueue');
+
+      if (!activeTicket) {
+        noTicketCard.classList.remove('hidden');
+        activeSection.classList.add('hidden');
+        leaveBtn.classList.add('hidden');
+        return;
+      }
+
+      noTicketCard.classList.add('hidden');
+      activeSection.classList.remove('hidden');
+      leaveBtn.classList.remove('hidden');
+
+      const st = stations.find(s => s.id === activeTicket.stationId);
+      const stationLabel = st
+        ? (isAmharic ? st.nameAm : st.nameEn)
+        : (isAmharic ? activeTicket.stationNameAm : activeTicket.stationNameEn);
+      document.getElementById('ticketStationName').textContent = stationLabel || activeTicket.stationId;
+      document.getElementById('ticketTokenDisplay').textContent = '#' + activeTicket.ticketNumber;
+      document.getElementById('ticketPlateDisplay').textContent = activeTicket.licensePlate;
+      document.getElementById('ticketCatDisplay').textContent = activeTicket.vehicleCategory;
+
+      const statusEl = document.getElementById('ticketStatusDisplay');
+      if (activeTicket.status === 'CALLED') {
+        statusEl.textContent = `CALLED • PUMP #${activeTicket.calledPumpNumber || 1}`;
+        statusEl.className = "bg-emerald-500 text-gray-950 px-2.5 py-1 rounded font-black";
+      } else if (activeTicket.status === 'COMPLETED') {
+        statusEl.textContent = "COMPLETED";
+        statusEl.className = "bg-sky-950 text-sky-300 border border-sky-700 px-2.5 py-1 rounded font-bold";
+      } else if (activeTicket.status === 'CANCELLED') {
+        statusEl.textContent = "CANCELLED";
+        statusEl.className = "bg-red-950 text-red-400 border border-red-800 px-2.5 py-1 rounded font-bold";
+      } else {
+        statusEl.textContent = activeTicket.status || "WAITING";
+        statusEl.className = "bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded font-bold";
+      }
+
+      const lane = (st && st.lanes && st.lanes[activeTicket.vehicleCategory])
+        ? st.lanes[activeTicket.vehicleCategory]
+        : { currentlyServing: Math.max(0, activeTicket.ticketNumber - 1), avgDurationSeconds: 120 };
+
+      const ahead = Math.max(0, activeTicket.ticketNumber - (lane.currentlyServing || 0));
+      document.getElementById('ticketAheadDisplay').textContent = ahead;
+      const waitMin = activeTicket.status === 'CALLED' ? 0 : Math.max(1, Math.floor((ahead * (lane.avgDurationSeconds || 120)) / 60));
+      document.getElementById('ticketWaitDisplay').textContent = activeTicket.status === 'CALLED' ? 'NOW!' : `~${waitMin} min`;
+
+      const alertBox = document.getElementById('alertBox');
+      if ((activeTicket.status === 'WAITING' || activeTicket.status === 'CALLED') && (ahead <= 3 || waitMin <= 10 || activeTicket.status === 'CALLED')) {
+        alertBox.classList.remove('hidden');
+        if (!hasAutoAlerted) {
+          hasAutoAlerted = true;
+          playDriverAlert();
+        }
+      } else {
+        alertBox.classList.add('hidden');
+      }
+    }
+
+    function playDriverAlert() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+          osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.6);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.0);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 1.0);
+        }
+      } catch(e){}
+
+      if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 600]);
+
+      setTimeout(() => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const txt = isAmharic ? "ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!" : "Your turn will arrive in 10 minutes; please come to the station!";
+          const ut = new SpeechSynthesisUtterance(txt);
+          ut.lang = isAmharic ? 'am-ET' : 'en-US';
+          window.speechSynthesis.speak(ut);
+        }
+      }, 500);
+
+      const alertMsg = isAmharic ? "🚨 ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት፤ ወደ ማድያ ይምጡ!" : "🚨 Your turn will arrive in 10 minutes; please come to the station!";
+      if (window.HawassaPWA) {
+        window.HawassaPWA.notifyTurnAlert("Hawassa Transit Queue", alertMsg, "/driver");
+      }
+
+      toast(isAmharic ? "🚨 ተራዎ ሊደርስ 10 ደቂቃ ቀረዎት!" : "🚨 10-Minute Warning!");
+    }
+
+    function toast(m) {
+      const b = document.getElementById('toastBox');
+      document.getElementById('toastMsg').textContent = m;
+      b.classList.remove('hidden');
+      clearTimeout(b._t);
+      b._t = setTimeout(() => b.classList.add('hidden'), 3500);
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (!window.HawassaFirestore) return;
+
+      window.HawassaFirestore.onStatusChange((connected, msg) => {
+        document.getElementById('cloudSyncSubtitle').textContent = msg;
+        document.getElementById('liveCloudDot').className = connected
+          ? "w-2 h-2 rounded-full bg-emerald-400 animate-ping"
+          : "w-2 h-2 rounded-full bg-amber-400";
+      });
+
+      window.HawassaFirestore.onStationsChange((updated) => {
+        stations = updated || [];
+        renderRadar();
+        renderTicket();
+      });
+
+      window.HawassaFirestore.onBroadcastAlert(() => {
+        playDriverAlert();
+      });
+
+      await window.HawassaFirestore.init();
+
+      // Restore previous booking if driver refreshes the page
+      const savedId = window.HawassaFirestore.getSavedTicketId();
+      if (savedId) {
+        window.HawassaFirestore.subscribeToTicket(savedId, onTicketSnapshot);
+      }
+
+      renderRadar();
+      renderTicket();
+    });
+  </script>
+</body>
+</html>
