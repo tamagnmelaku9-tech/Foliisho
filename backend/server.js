@@ -365,8 +365,14 @@ app.post('/api/admin/station/:stationId/fuel-stock', (req, res) => {
 
 // APK Download endpoint for testing on physical Android devices
 app.get(['/download/hawassa-transit-driver.apk', '/download/app-debug.apk'], (req, res) => {
-  const apkPath = path.join(__dirname, '..', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-  if (fs.existsSync(apkPath)) {
+  const candidates = [
+    path.join(__dirname, '..', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk'),
+    path.join(__dirname, '..', 'public', 'hawassa-transit-driver.apk'),
+    path.join(__dirname, '..', 'HawassaTransitDriver.apk'),
+    path.join(__dirname, '..', 'app-debug.apk')
+  ];
+  const apkPath = candidates.find((p) => fs.existsSync(p));
+  if (apkPath) {
     res.download(apkPath, 'HawassaTransitDriver.apk');
   } else {
     res.status(404).send('APK is currently compiling. Please check back in a few moments.');

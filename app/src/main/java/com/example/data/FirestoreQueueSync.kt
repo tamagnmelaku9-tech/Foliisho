@@ -47,7 +47,11 @@ class FirestoreQueueSync(
 
     private val db: FirebaseFirestore by lazy {
         val dbId = context.getString(R.string.firestore_database_id).ifBlank { "(default)" }
-        FirebaseFirestore.getInstance(dbId)
+        if (dbId == "(default)") {
+            FirebaseFirestore.getInstance()
+        } else {
+            FirebaseFirestore.getInstance(dbId)
+        }
     }
 
     private val prefs by lazy {

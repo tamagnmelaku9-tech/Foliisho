@@ -322,7 +322,9 @@
   </footer>
 
   <script>
-    let currentStation = 'benzene_madya';
+    let currentStation = (function() {
+      try { return localStorage.getItem('hawassa_admin_selected_station') || 'benzene_madya'; } catch (e) { return 'benzene_madya'; }
+    })();
     let currentCategory = 'BAJAJ';
     let queueFilter = 'LANE'; // 'LANE' or 'ALL'
     let isAmharic = false;
@@ -353,6 +355,7 @@
 
     function changeStation(stId) {
       currentStation = stId;
+      try { localStorage.setItem('hawassa_admin_selected_station', stId); } catch (e) {}
       renderAll();
       const st = getActiveStation();
       if (st) {

@@ -213,6 +213,31 @@
       return this.stations;
     }
 
+    _getBaselineStation(stationId) {
+      const current = this.stations.find((s) => s.id === stationId);
+      if (current) return JSON.parse(JSON.stringify(current));
+      const def = DEFAULT_STATIONS.find((s) => s.id === stationId) || DEFAULT_STATIONS[0];
+      return JSON.parse(JSON.stringify(def));
+    }
+
+    _updateLocalStation(stationId, mutatorFn) {
+      let updated = false;
+      this.stations = this.stations.map((s) => {
+        if (s.id !== stationId) return s;
+        updated = true;
+        const copy = JSON.parse(JSON.stringify(s));
+        mutatorFn(copy);
+        return copy;
+      });
+      if (!updated) {
+        const base = this._getBaselineStation(stationId);
+        mutatorFn(base);
+        this.stations.push(base);
+      }
+      this._saveCachedStations(this.stations);
+      this._emitStations();
+    }
+
     getTickets(stationId) {
       if (!stationId) return this.tickets;
       return this.tickets.filter((t) => t.stationId === stationId);
@@ -487,12 +512,22 @@
     // ====================================================
 
     async setPermittedCategory(stationId, category) {
+      this._updateLocalStation(stationId, (st) => {
+        st.activePermittedCategory = category;
+      });
       await this.init();
       if (!this.db) return;
-      await this.db.collection("stations").doc(stationId).update({
-        activePermittedCategory: category,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      const base = this._getBaselineStation(stationId);
+      base.activePermittedCategory = category;
+      await this.db.collection("stations").doc(stationId).set(
+        {
+          ...base,
+          id: stationId,
+          activePermittedCategory: category,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
     }
 
     async callNextDriver(stationId, category) {
@@ -504,8 +539,9 @@
 
       const nextServing = await this.db.runTransaction(async (transaction) => {
         const stDoc = await transaction.get(stationRef);
-        if (!stDoc.exists) return 0;
-        const stData = JSON.parse(JSON.stringify(stDoc.data()));
+        const stData = stDoc.exists
+          ? JSON.parse(JSON.stringify(stDoc.data()))
+          : this._getBaselineStation(stationId);
         const lanes = stData.lanes || {};
         const lane = lanes[category] || { currentlyServing: 100, lastAssigned: 100, avgDurationSeconds: 120, isActive: true };
 
@@ -517,11 +553,25 @@
         lane.lastAssigned = Math.max(lane.lastAssigned || 0, updatedServing);
         lanes[category] = lane;
 
-        transaction.update(stationRef, {
-          [`lanes.${category}`]: lane,
-          updatedAt: ts
-        });
+        transaction.set(
+          stationRef,
+          {
+            ...stData,
+            id: stationId,
+            lanes,
+            updatedAt: ts
+          },
+          { merge: true }
+        );
         return updatedServing;
+      });
+
+      this._updateLocalStation(stationId, (st) => {
+        if (!st.lanes) st.lanes = {};
+        const lane = st.lanes[category] || { currentlyServing: 100, lastAssigned: 100, avgDurationSeconds: 120, isActive: true };
+        lane.currentlyServing = nextServing;
+        lane.lastAssigned = Math.max(lane.lastAssigned || 0, nextServing);
+        st.lanes[category] = lane;
       });
 
       // Sync matching tickets for this station & category
@@ -568,19 +618,26 @@
       // Update station lane counter if needed
       await this.db.runTransaction(async (transaction) => {
         const stDoc = await transaction.get(stationRef);
-        if (stDoc.exists) {
-          const stData = stDoc.data();
-          const lane = (stData.lanes && stData.lanes[ticket.vehicleCategory]) || { currentlyServing: 0, lastAssigned: 0, avgDurationSeconds: 120, isActive: true };
-          const updatedLane = {
-            ...lane,
-            currentlyServing: Math.max(lane.currentlyServing || 0, ticket.ticketNumber),
-            lastAssigned: Math.max(lane.lastAssigned || 0, ticket.ticketNumber)
-          };
-          transaction.update(stationRef, {
-            [`lanes.${ticket.vehicleCategory}`]: updatedLane,
+        const stData = stDoc.exists
+          ? JSON.parse(JSON.stringify(stDoc.data()))
+          : this._getBaselineStation(ticket.stationId);
+        const lanes = stData.lanes || {};
+        const lane = lanes[ticket.vehicleCategory] || { currentlyServing: 0, lastAssigned: 0, avgDurationSeconds: 120, isActive: true };
+        lanes[ticket.vehicleCategory] = {
+          ...lane,
+          currentlyServing: Math.max(lane.currentlyServing || 0, ticket.ticketNumber),
+          lastAssigned: Math.max(lane.lastAssigned || 0, ticket.ticketNumber)
+        };
+        transaction.set(
+          stationRef,
+          {
+            ...stData,
+            id: ticket.stationId,
+            lanes,
             updatedAt: ts
-          });
-        }
+          },
+          { merge: true }
+        );
       });
 
       // Mark target ticket CALLED & earlier waiting/called tickets in same lane COMPLETED
@@ -624,34 +681,61 @@
     }
 
     async toggleLaneActive(stationId, category, isActive) {
+      this._updateLocalStation(stationId, (st) => {
+        if (!st.lanes) st.lanes = {};
+        if (!st.lanes[category]) st.lanes[category] = { currentlyServing: 100, lastAssigned: 100, avgDurationSeconds: 120, isActive: true };
+        st.lanes[category].isActive = isActive;
+      });
       await this.init();
       if (!this.db) return;
-      await this.db.collection("stations").doc(stationId).update({
-        [`lanes.${category}.isActive`]: isActive,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      const base = this._getBaselineStation(stationId);
+      if (!base.lanes) base.lanes = {};
+      base.lanes[category] = { ...(base.lanes[category] || {}), isActive };
+      await this.db.collection("stations").doc(stationId).set(
+        {
+          ...base,
+          id: stationId,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
     }
 
     async updateFuelStock(stationId, isBenzene, newStatus) {
+      const field = isBenzene ? "benzeneStatus" : "dieselStatus";
+      this._updateLocalStation(stationId, (st) => {
+        st[field] = newStatus;
+      });
       await this.init();
       if (!this.db) return;
-      const field = isBenzene ? "benzeneStatus" : "dieselStatus";
-      await this.db.collection("stations").doc(stationId).update({
-        [field]: newStatus,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      const base = this._getBaselineStation(stationId);
+      base[field] = newStatus;
+      await this.db.collection("stations").doc(stationId).set(
+        {
+          ...base,
+          id: stationId,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
     }
 
     async broadcastTenMinAlert(stationId, category) {
       await this.init();
       if (!this.db) return;
-      await this.db.collection("stations").doc(stationId).update({
-        lastBroadcastAlert: {
-          category: category || "ALL",
-          timestamp: Date.now()
+      const base = this._getBaselineStation(stationId);
+      await this.db.collection("stations").doc(stationId).set(
+        {
+          ...base,
+          id: stationId,
+          lastBroadcastAlert: {
+            category: category || "ALL",
+            timestamp: Date.now()
+          },
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+        { merge: true }
+      );
     }
   }
 

@@ -452,7 +452,9 @@
     ];
 
     let isAmharic = true;
-    let currentAdminStationId = "benzene_madya";
+    let currentAdminStationId = (function() {
+      try { return localStorage.getItem('hawassa_admin_selected_station') || 'benzene_madya'; } catch (e) { return 'benzene_madya'; }
+    })();
     let adminQueueFilter = "LANE";
     let stations = [];
     let allTickets = [];
@@ -514,6 +516,7 @@
 
     function onAdminStationChange() {
       currentAdminStationId = document.getElementById('adminStationSelect').value;
+      try { localStorage.setItem('hawassa_admin_selected_station', currentAdminStationId); } catch (e) {}
       renderAdminPanel();
     }
 
@@ -975,6 +978,8 @@
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
+      const stationSel = document.getElementById('adminStationSelect');
+      if (stationSel) stationSel.value = currentAdminStationId;
       updatePhoneClock();
       setInterval(updatePhoneClock, 10000);
 
